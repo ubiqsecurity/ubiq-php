@@ -1,0 +1,251 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * PHP version 7
+ *
+ * @category Cryptography
+ * @package  Ubiq-PHP
+ * @author   Ubiq Security <support@ubiqsecurity.com>
+ * @license  https://opensource.org/licenses/MIT MIT
+ * @link     https://gitlab.com/ubiqsecurity/ubiq-php
+ */
+
+namespace Ubiq;
+
+/**
+ * Ubiq encryption object
+ *
+ * @category Cryptography
+ * @package  Ubiq-PHP
+ * @author   Ubiq Security <support@ubiqsecurity.com>
+ * @license  https://opensource.org/licenses/MIT MIT
+ * @link     https://gitlab.com/ubiqsecurity/ubiq-php
+ */
+class Encryption
+{
+
+    private $_key_raw, $_key_enc;
+    private $_session, $_fingerprint;
+    private $_algorithm, $_fragment;
+    private $_uses_max, $_uses_cur;
+
+    private $_header;
+
+    private $_baseurl;
+    private $_http;
+
+    /**
+     * Construct a new encryption object
+     *
+     * The constructor uses the supplied credentials and the requested
+     * number of uses of the key to request a data encryption key from
+     * the server. If the request is successful, the object prepares
+     * the key for use by the begin(), update(), and end() series of
+     * functions.
+     *
+     * Failures result in exceptions being thrown
+     *
+     * @param Credentials $creds The credentials associated with the account
+     *                           used to obtain the key
+     * @param int         $uses  The number of encryptions that will be
+     *                           performed using the obtained key
+     */
+    public function __construct(
+        Credentials $creds = null, int $uses = 1
+    ) {
+        if ($creds) {
+            $this->_baseurl = $creds->getHost() . '/api/v0/encryption/key';
+            $this->_http = new Request(
+                $creds->getPapi(), $creds->getSapi()
+            );
+
+            $resp = $this->_http->post(
+                $this->_baseurl,
+                json_encode(
+                    array(
+                        'uses' => $uses
+                    )
+                ),
+                'application/json'
+            );
+
+            if (!$resp) {
+                throw new \Exception(
+                    'Request for encryption key failed'
+                );
+            } else if ($resp['status'] != 201) {
+                throw new \Exception(
+                    'Request for encryption key returned ' . $resp['status']
+                );
+            } else /* all good */ {
+                $json = json_decode($resp['content'], true);
+
+                $pkey = openssl_pkey_get_private(
+                    $json['encrypted_private_key'], $creds->getSrsa()
+                );
+                openssl_private_decrypt(
+                    base64_decode($json['wrapped_data_key']),
+                    $this->_key_raw,
+                    $pkey,
+                    OPENSSL_PKCS1_OAEP_PADDING
+                );
+                $this->_key_enc     = base64_decode(
+                    $json['encrypted_data_key']
+                );
+                $this->_session     = $json['encryption_session'];
+                $this->_fingerprint = $json['key_fingerprint'];
+                $this->_algorithm   = new Algorithm(
+                    strtolower(
+                        $json['security_model']['algorithm']
+                    )
+                );
+                $this->_fragment    = $json['security_model']
+                                    ['enable_data_fragmentation'];
+                $this->_uses_max    = $json['max_uses'];
+                $this->_uses_cur    = 0;
+            }
+        }
+    }
+
+    /**
+     * Begin encryption of a new plaintext
+     *
+     * @return A string containing the initial portion of the ciphertext
+     */
+    public function begin() : string
+    {
+        if (!is_null($this->_header)) {
+            throw new \Exception(
+                'Encryption already in progress'
+            );
+        } else if ($this->_uses_cur >= $this->_uses_max) {
+            throw new \Exception(
+                'Maximum number of key uses exceeded'
+            );
+        }
+
+        /*
+         * there is an openssl_random_pseudo_bytes() function,
+         * but whether it returns cryptographically strong random
+         * data is system dependent. random_bytes() is always
+         * cryptographically strong according to the manual.
+         */
+        $iv = random_bytes($this->_algorithm->ivlen);
+
+        $flags = 0;
+        if ($this->_algorithm->taglen > 0) {
+            $flags |= HEADER_V0_FLAG_AAD;
+        }
+
+        $this->_header = pack(
+            'CCCCn',
+            0, /* version */
+            $flags,
+            $this->_algorithm->id,
+            $this->_algorithm->ivlen,
+            strlen($this->_key_enc)
+        );
+
+        $this->_header .= $iv;
+        $this->_header .= $this->_key_enc;
+
+        $this->_uses_cur++;
+
+        return $this->_header;
+    }
+
+    /**
+     * Add the given plaintext to the current encryption
+     *
+     * @param string $plaintext The plaintext to be encrypted
+     *
+     * @return A string containing a portion of the ciphertext. This
+     *         string should be appended to the string returned by the most
+     *         recent call to either begin() or update()
+     */
+    public function update(string $plaintext) : string
+    {
+        if (is_null($this->_header)) {
+            throw new \Exception(
+                'update() called without begin()'
+            );
+        } else if (strlen($this->_header) == 0) {
+            throw new \Exception(
+                'piecewise encryption not supported'
+            );
+        }
+
+        $iv = substr($this->_header, 6, $this->_algorithm->ivlen);
+
+        $tag = '';
+        $ct = openssl_encrypt(
+            $plaintext,
+            $this->_algorithm->name, $this->_key_raw,
+            /*
+             * we don't set the zero padding option, which means
+             * that openssl will automatically add padding out to
+             * the block size for algorithms that need it.
+             */
+            OPENSSL_RAW_DATA,
+            $iv, $tag, $this->_header, $this->_algorithm->taglen
+        );
+
+        $this->_header = '';
+
+        return $ct . $tag;
+    }
+
+    /**
+     * End the current encryption process
+     *
+     * @return A string containing any remaining ciphertext or authentication
+     *         information. This string should be appended to the string
+     *         returned by the most recent call to either begin() or update()
+     */
+    public function end() : string
+    {
+        if (is_null($this->_header)) {
+            throw new \Exception(
+                'end() called without begin()'
+            );
+        }
+
+        $ret = '';
+
+        if (strlen($this->_header) > 0) {
+            $ret = $this->update('');
+        }
+
+        $this->_header = null;
+
+        return $ret;
+    }
+
+    /**
+     * Destroy the encryption object
+     *
+     * If the constructor successfully obtained a data key and that key
+     * was used fewer times that was requested, this function will update
+     * the server to reduce the count of encryptions performed.
+     */
+    public function __destruct()
+    {
+        if ($this->_session
+            && $this->_uses_max > $this->_uses_cur
+        ) {
+            $resp = $this->_http->patch(
+                $this->_baseurl . '/' .
+                $this->_fingerprint . '/' . $this->_session,
+                json_encode(
+                    array(
+                        'requested' => $this->_uses_max,
+                        'actual' => $this->_uses_cur
+                    )
+                ),
+                'application/json'
+            );
+        }
+    }
+}

@@ -1,0 +1,11 @@
+# emacs droppings
+*~
+
+# composer packages
+/vendor/
+
+# unit test cache directory
+/.phpunit.cache/
+
+# code quality output
+phpcs.json
