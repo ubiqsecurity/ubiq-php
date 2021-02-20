@@ -144,8 +144,8 @@ $pt .= $decryption->update($ct);
 $pt .= $decryption->end();
 ```
 
-[gitlab-repo]: https://gitlab.com/ubiqsecurity/ubiq-php-dev/-/commits/master
-[pipeline-status]: https://gitlab.com/ubiqsecurity/ubiq-php-dev/badges/master/pipeline.svg
-[coverage-status]: https://gitlab.com/ubiqsecurity/ubiq-php-dev/badges/master/coverage.svg
+[gitlab-repo]: https://gitlab.com/ubiqsecurity/ubiq-php/-/commits/master
+[pipeline-status]: https://gitlab.com/ubiqsecurity/ubiq-php/badges/master/pipeline.svg
+[coverage-status]: https://gitlab.com/ubiqsecurity/ubiq-php/badges/master/coverage.svg
 [dashboard]:https://dashboard.ubiqsecurity.com/
 [credentials]:https://dev.ubiqsecurity.com/docs/how-to-create-api-keys
