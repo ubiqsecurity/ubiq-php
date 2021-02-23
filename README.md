@@ -137,7 +137,7 @@ $ct .= $encryption->end();
 
 ```php
 $credentials = new Ubiq\Credentials();
-$encryption = new Ubiq\Decryption($credentials, 1);
+$decryption = new Ubiq\Decryption($credentials, 1);
 
 $ct = fread($infile, $filesize);
 
