@@ -29,14 +29,6 @@ abstract class UbiqSampleMode
     const DECRYPT = 2;
 }
 
-// @codingStandardsIgnoreLine
-abstract class UbiqSampleMethod
-{
-    const UNSPEC = 0;
-    const SIMPLE = 1;
-    const PIECEWISE = 2;
-}
-
 /**
  * Encrypt a file using the simple encryption API
  *
@@ -74,68 +66,6 @@ function ubiqSampleSimpleDecrypt(
 }
 
 /**
- * Encrypt a file using the piecewise encryption API
- *
- * @param $creds The credentials to use for the operation
- * @param $ifp   The resource associated with the input file
- * @param $ofp   The resource associated with the output file
- * @param $size  The number of bytes in the input file
- *
- * @return None
- */
-function ubiqSamplePiecewiseEncrypt(
-    Ubiq\Credentials $creds, &$ifp, &$ofp, int $size
-) : void {
-    $enc = new Ubiq\Encryption($creds);
-
-    /*
-     * the underlying PHP cryptography library does not
-     * support "piecewise" encryption/decryption, so for the
-     * purpose of this example the piecewise interface operates
-     * on the entire input at once
-     */
-
-    $pt = fread($ifp, $size);
-
-    $ct  = $enc->begin();
-    $ct .= $enc->update($pt);
-    $ct .= $enc->end();
-
-    fwrite($ofp, $ct);
-}
-
-/**
- * Decrypt a file using the simple decryption API
- *
- * @param $creds The credentials to use for the operation
- * @param $ifp   The resource associated with the input file
- * @param $ofp   The resource associated with the output file
- * @param $size  The number of bytes in the input file
- *
- * @return None
- */
-function ubiqSamplePiecewiseDecrypt(
-    Ubiq\Credentials $creds, &$ifp, &$ofp, int $size
-) : void {
-    $dec = new Ubiq\Decryption($creds);
-
-    /*
-     * the underlying PHP cryptography library does not
-     * support "piecewise" encryption/decryption, so for the
-     * purpose of this example the piecewise interface operates
-     * on the entire input at once
-     */
-
-    $ct = fread($ifp, $size);
-
-    $pt  = $dec->begin();
-    $pt .= $dec->update($ct);
-    $pt .= $dec->end();
-
-    fwrite($ofp, $pt);
-}
-
-/**
  * Display sample usage to standard error
  *
  * @param $cmd The name of the command
@@ -149,7 +79,7 @@ function ubiqSampleUsage(string $cmd, ?string $err) : void
         fwrite(STDERR, "$err\n\n");
     }
 
-    fwrite(STDERR, "Usage: $cmd -e|-d -s|-p -i INFILE -o OUTFILE\n");
+    fwrite(STDERR, "Usage: $cmd -e|-d -i INFILE -o OUTFILE\n");
     fwrite(STDERR, "Encrypt or decrypt files using the Ubiq service\n");
     fwrite(STDERR, "\n");
     fwrite(STDERR, "  -h                       ");
@@ -164,10 +94,6 @@ function ubiqSampleUsage(string $cmd, ?string $err) : void
     fwrite(STDERR, "Decrypt the contents of the input file and write\n");
     fwrite(STDERR, "                           ");
     fwrite(STDERR, "  the results to the output file\n");
-    fwrite(STDERR, "  -s                       ");
-    fwrite(STDERR, "Use the simple encryption / decryption interfaces\n");
-    fwrite(STDERR, "  -p                       ");
-    fwrite(STDERR, "Use the piecewise encryption / decryption interfaces\n");
     fwrite(STDERR, "  -i INFILE                Set input file name\n");
     fwrite(STDERR, "  -o OUTFILE               Set output file name\n");
     fwrite(STDERR, "  -c CREDENTIALS           ");
@@ -194,14 +120,14 @@ function ubiqSampleUsage(string $cmd, ?string $err) : void
  *
  * @param $argv The argument vector given to the program
  *
- * @return An associative array containing 'mode', 'method', 'infile',
- *         'outfile, and optionally 'credfile' and 'profile'
+ * @return An associative array containing 'mode', 'infile', 'outfile,
+ *         and optionally 'credfile' and 'profile'
  */
 function ubiqSampleGetopt(array $argv) : array
 {
     $opts = array();
 
-    $args = getopt('hVedspi:o:c:P:', array(), $index);
+    $args = getopt('hVedi:o:c:P:', array(), $index);
     if (count($argv) > 1 && $index != count($argv)) {
         ubiqSampleUsage($argv[0], "unrecognized argument: $argv[$index]");
         exit(1);
@@ -215,26 +141,6 @@ function ubiqSampleGetopt(array $argv) : array
     if (array_key_exists('V', $args)) {
         fwrite(STDERR, "version 0.0.0\n");
         exit(0);
-    }
-
-    /* -s and -p both specified */
-    if ((array_key_exists('s', $args) && array_key_exists('p', $args))
-        /* -s specified more than once */
-        || (array_key_exists('s', $args) && is_array($args['s']))
-        /* -p specified more than once */
-        || (array_key_exists('p', $args) && is_array($args['p']))
-    ) {
-        ubiqSampleUsage(
-            $argv[0], 'please specify one of simple or piecewise once'
-        );
-        exit(1);
-    } else if (array_key_exists('s', $args)) {
-        $opts['method'] = UbiqSampleMethod::SIMPLE;
-    } else if (array_key_exists('p', $args)) {
-        $opts['method'] = UbiqSampleMethod::PIECEWISE;
-    } else {
-        ubiqSampleUsage($argv[0], 'simple / piecewise method not specified');
-        exit(1);
     }
 
     /* -e and -d both specified */
@@ -372,18 +278,10 @@ function main(array $argv) : int
         exit(1);
     }
 
-    if ($opts['method'] == UbiqSampleMethod::SIMPLE) {
-        if ($opts['mode'] == UbiqSampleMode::ENCRYPT) {
-            ubiqSampleSimpleEncrypt($creds, $ifp, $ofp, $size);
-        } else /* decrypt */ {
-            ubiqSampleSimpleDecrypt($creds, $ifp, $ofp, $size);
-        }
-    } else /* piecewise */ {
-        if ($opts['mode'] == UbiqSampleMode::ENCRYPT) {
-            ubiqSamplePiecewiseEncrypt($creds, $ifp, $ofp, $size);
-        } else /* decrypt */ {
-            ubiqSamplePiecewiseDecrypt($creds, $ifp, $ofp, $size);
-        }
+    if ($opts['mode'] == UbiqSampleMode::ENCRYPT) {
+        ubiqSampleSimpleEncrypt($creds, $ifp, $ofp, $size);
+    } else /* decrypt */ {
+        ubiqSampleSimpleDecrypt($creds, $ifp, $ofp, $size);
     }
 
     fclose($ofp);

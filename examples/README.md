@@ -39,7 +39,7 @@ From the top level of the source directory:
 $ php -f examples/ubiq_sample.php -- -h
 ```
 <pre>
-Usage: examples/ubiq_sample.php -e|-d -s|-p -i INFILE -o OUTFILE
+Usage: examples/ubiq_sample.php -e|-d -i INFILE -o OUTFILE
 Encrypt or decrypt files using the Ubiq service
 
   -h                       Show this help message and exit
@@ -48,8 +48,6 @@ Encrypt or decrypt files using the Ubiq service
                              the results to the output file
   -d                       Decrypt the contents of the input file and write
                              the results to the output file
-  -s                       Use the simple encryption / decryption interfaces
-  -p                       Use the piecewise encryption / decryption interfaces
   -i INFILE                Set input file name
   -o OUTFILE               Set output file name
   -c CREDENTIALS           Set the file name with the API credentials
@@ -57,27 +55,14 @@ Encrypt or decrypt files using the Ubiq service
   -P PROFILE               Identify the profile within the credentials file
 </pre>
 
-#### Demonstrate using the simple (-s / -simple) API interface to encrypt this README.md file and write the encrypted data to /tmp/readme.enc
+#### Demonstrate using the simple API interface to encrypt this README.md file and write the encrypted data to /tmp/readme.enc
 
 ```sh
-$ php -f examples/ubiq_sample.php -- -i README.md -o /tmp/readme.enc -e -s -c ./credentials
+$ php -f examples/ubiq_sample.php -- -i README.md -o /tmp/readme.enc -e -c ./credentials
 ```
 
-#### Demonstrate using the simple (-s / -simple) API interface to decrypt the /tmp/readme.enc file and write the decrypted output to /tmp/README.out
+#### Demonstrate using the simple API interface to decrypt the /tmp/readme.enc file and write the decrypted output to /tmp/README.out
 
 ```sh
-$ php -f examples/ubiq_sample.php -- -i /tmp/readme.enc -o /tmp/README.out -d -s -c ./credentials
+$ php -f examples/ubiq_sample.php -- -i /tmp/readme.enc -o /tmp/README.out -d -c ./credentials
 ```
-
-#### Demonstrate using the piecewise (-p / -piecewise) API interface to encrypt this README.md file and write the encrypted data to /tmp/readme.enc
-
-```sh
-$ php -f examples/ubiq_sample.php -- -i README.md -o /tmp/readme.enc -e -p -c ./credentials
-```
-
-#### Demonstrate using the piecewise (-p / -piecewise) API interface to decrypt the /tmp/readme.enc file and write the decrypted output to /tmp/README.out
-
-```sh
-$ php -f examples/ubiq_sample.php -- -i /tmp/readme.enc -o /tmp/README.out -d -p -c ./credentials
-```
-
