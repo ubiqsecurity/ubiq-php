@@ -135,7 +135,9 @@ class Request
         $response = '';
 
         curl_reset($this->_curl);
-        curl_setopt($this->_curl, CURLOPT_USERAGENT, 'ubiq-php/0.0');
+        curl_setopt(
+            $this->_curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION
+        );
 
         curl_setopt($this->_curl, CURLOPT_URL, $url);
 
