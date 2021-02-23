@@ -37,6 +37,8 @@ To use the library in your code, simply
 require '/path/to/Ubiq.php';
 ```
 
+## Usage
+
 ### Credentials
 
 The library needs to be configured with your account credentials which are
