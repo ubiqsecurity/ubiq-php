@@ -1,0 +1,22 @@
+image:
+    name: debian:stable
+
+variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+
+stages:
+    - test
+
+test:
+    stage: test
+    before_script:
+        - apt -y update
+        - apt -y install composer make php-curl php-xdebug php-xml
+        - composer install
+    script:
+        - make test
+    artifacts:
+        expire_in: 1 hour
+        reports:
+            codequality: phpcs.json

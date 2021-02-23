@@ -1,0 +1,18 @@
+{
+    "name": "ubiqsecurity/ubiq-php",
+    "type": "library",
+    "description": "Ubiq PHP client library",
+    "keywords": [ "ubiq", "client", "crypto" ],
+    "homepage": "https://gitlab.com/ubiqsecurity/ubiq-php",
+    "license": "MIT",
+
+    "require": {
+        "php": ">=7"
+    },
+
+    "require-dev": {
+        "phpunit/phpunit": ">=8",
+        "squizlabs/php_codesniffer": "*",
+        "micheh/phpcs-gitlab": "*"
+    }
+}
