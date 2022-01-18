@@ -23,7 +23,7 @@ foreach (array('Algorithm.php',
     include implode(DIRECTORY_SEPARATOR, array(__DIR__, $file));
 }
 
-const VERSION = '0.0.1';
+const VERSION = '0.0.2';
 const HEADER_V0_FLAG_AAD = 1;
 
 /**
