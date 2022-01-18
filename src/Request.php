@@ -56,10 +56,13 @@ class Request
             $target .= '?' . $urlparts['query'];
         }
 
+        $tz = new \DateTimeZone(date_default_timezone_get());
+        $offset = $tz->getOffset(new \DateTime('now', $tz));
+
         $created = time();
         $headers['(created)'] = strval($created);
-        $headers['Date'] = date('D, d M Y H:i:s', $created) . ' GMT';
-
+        $headers['Date'] = date('D, d M Y H:i:s', $created-$offset) . ' GMT';
+        
         $headers['Host'] = $urlparts['host'];
         if (($urlparts['scheme'] == 'http'
              // @codingStandardsIgnoreLine
