@@ -21,6 +21,8 @@ class _Credentials
     public $sapi = null;
     public $srsa = null;
     public $host = null;
+    public $config = null;
+    public $keycache = null;
 
     /**
      * Determine if enough of the credentials properties are present to
@@ -94,7 +96,7 @@ class Credentials
     public static function getDefaultFileName()
         : ?string
     {
-        $homedir = posix_getpwuid(posix_geteuid())['dir'];
+        $homedir = '.';//posix_getpwuid(posix_geteuid())['dir'];
         return $homedir . DIRECTORY_SEPARATOR . '.ubiq/credentials';
     }
 
@@ -277,7 +279,9 @@ class Credentials
         $res = $creds->viable();
         if ($res) {
             $res = $this->set(
-                $creds->papi, $creds->sapi, $creds->srsa,
+                $creds->papi,
+                $creds->sapi,
+                $creds->srsa,
                 $creds->host
             );
         }
@@ -298,10 +302,28 @@ class Credentials
 
         if ($creds->viable()) {
             $this->set(
-                $creds->papi, $creds->sapi, $creds->srsa,
+                $creds->papi,
+                $creds->sapi,
+                $creds->srsa,
                 $creds->host
             );
         }
+
+        $config = file_get_contents(realpath(__DIR__ . '/../ubiq-config.json'));
+
+        if (empty($config)) {
+            $creds->config = [
+                'key_caching' => [
+                    'unstructured'  => FALSE,
+                    'encrypt'       => FALSE,
+                ]
+            ];
+        }
+        else {
+            $this->config = json_decode($config, TRUE);
+        }
+
+        $this->keycache = new \Ubiq\KeyCache();
     }
 
     /**

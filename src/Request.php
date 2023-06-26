@@ -141,7 +141,7 @@ class Request
         curl_setopt(
             $this->_curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION
         );
-
+        
         curl_setopt($this->_curl, CURLOPT_URL, $url);
 
         if ($content) {
@@ -181,6 +181,9 @@ class Request
         curl_setopt($this->_curl, CURLOPT_HTTPHEADER, $headers);
 
         curl_exec($this->_curl);
+        $i = curl_getinfo($this->_curl);
+        $e = curl_error($this->_curl);
+
         if (!curl_error($this->_curl)) {
             $ret = array(
                 'status' => curl_getinfo(

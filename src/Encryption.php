@@ -29,12 +29,8 @@ class Encryption
     private $_key_raw, $_key_enc;
     private $_session, $_fingerprint;
     private $_algorithm, $_fragment;
-    private $_uses_max, $_uses_cur;
 
     private $_header;
-
-    private $_baseurl;
-    private $_http;
 
     /**
      * Construct a new encryption object
@@ -47,66 +43,32 @@ class Encryption
      *
      * Failures result in exceptions being thrown
      *
-     * @param Credentials $creds The credentials associated with the account
-     *                           used to obtain the key
-     * @param int         $uses  The number of encryptions that will be
-     *                           performed using the obtained key
+     * @param Credentials   $creds          The credentials associated with the account
+     *                                      used to obtain the key
+     * @param Dataset       $dataset        The dataset this operation is being performed on
+     *                                      Will default to NULL, which will be derived based on access
+     * @param Bool          $multiple_uses  Whether or not the encryption key should be re-used
+     * 
      */
     public function __construct(
-        Credentials $creds = null, int $uses = 1
+        Credentials $creds = NULL,
+        $dataset = NULL,
+        $multiple_uses = FALSE
     ) {
+        $dataset = new Dataset($dataset);
+
+        ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' uses');
+
         if ($creds) {
-            $this->_baseurl = $creds->getHost() . '/api/v0/encryption/key';
-            $this->_http = new Request(
-                $creds->getPapi(), $creds->getSapi()
-            );
-
-            $resp = $this->_http->post(
-                $this->_baseurl,
-                json_encode(
-                    array(
-                        'uses' => $uses
-                    )
-                ),
-                'application/json'
-            );
-
-            if (!$resp) {
-                throw new \Exception(
-                    'Request for encryption key failed'
-                );
-            } else if ($resp['status'] != 201) {
-                throw new \Exception(
-                    'Request for encryption key returned ' . $resp['status']
-                );
-            } else /* all good */ {
-                $json = json_decode($resp['content'], true);
-
-                $pkey = openssl_pkey_get_private(
-                    $json['encrypted_private_key'], $creds->getSrsa()
-                );
-                openssl_private_decrypt(
-                    base64_decode($json['wrapped_data_key']),
-                    $this->_key_raw,
-                    $pkey,
-                    OPENSSL_PKCS1_OAEP_PADDING
-                );
-                $this->_key_enc     = base64_decode(
-                    $json['encrypted_data_key']
-                );
-                $this->_session     = $json['encryption_session'];
-                $this->_fingerprint = $json['key_fingerprint'];
-                $this->_algorithm   = new Algorithm(
-                    strtolower(
-                        $json['security_model']['algorithm']
-                    )
-                );
-                $this->_fragment    = $json['security_model']
-                                    ['enable_data_fragmentation'];
-                $this->_uses_max    = $json['max_uses'];
-                $this->_uses_cur    = 0;
-            }
+            $key = $creds->keycache->getEncryptionKey($creds, $dataset, !$multiple_uses);
         }
+
+        $this->_key_enc = $key['_key_enc'] ?? NULL;
+        $this->_key_raw = $key['_key_raw'] ?? NULL;
+        $this->_session = $key['_session'] ?? NULL;
+        $this->_fingerprint = $key['_fingerprint'] ?? NULL;
+        $this->_algorithm = $key['_algorithm'] ?? NULL;
+        $this->_fragment = $key['_fragment'] ?? NULL;
     }
 
     /**
@@ -116,13 +78,10 @@ class Encryption
      */
     public function begin() : string
     {
+
         if (!is_null($this->_header)) {
             throw new \Exception(
                 'Encryption already in progress'
-            );
-        } else if ($this->_uses_cur >= $this->_uses_max) {
-            throw new \Exception(
-                'Maximum number of key uses exceeded'
             );
         }
 
@@ -150,8 +109,6 @@ class Encryption
 
         $this->_header .= $iv;
         $this->_header .= $this->_key_enc;
-
-        $this->_uses_cur++;
 
         return $this->_header;
     }
@@ -182,7 +139,8 @@ class Encryption
         $tag = '';
         $ct = openssl_encrypt(
             $plaintext,
-            $this->_algorithm->name, $this->_key_raw,
+            $this->_algorithm->name,
+            $this->_key_raw,
             /*
              * we don't set the zero padding option, which means
              * that openssl will automatically add padding out to
@@ -232,20 +190,6 @@ class Encryption
      */
     public function __destruct()
     {
-        if ($this->_session
-            && $this->_uses_max > $this->_uses_cur
-        ) {
-            $resp = $this->_http->patch(
-                $this->_baseurl . '/' .
-                $this->_fingerprint . '/' . $this->_session,
-                json_encode(
-                    array(
-                        'requested' => $this->_uses_max,
-                        'actual' => $this->_uses_cur
-                    )
-                ),
-                'application/json'
-            );
-        }
+        // do event reporting
     }
 }

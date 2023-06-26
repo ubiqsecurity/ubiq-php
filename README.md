@@ -20,7 +20,7 @@ On Debian and Debian-like Linux systems:
 $ sudo apt install php php-xml php-curl composer
 ```
 
-Clone the PHP repository, and install dependencies
+### Clone the PHP repository, and install dependencies
 
 ```sh
 $ git clone https://gitlab.com/ubiqsecurity/ubiq-php.git
@@ -28,14 +28,30 @@ $ cd ubiq-php
 $ composer install
 ```
 
+Then include the library in your code with
+```
+require '/path/to/Ubiq.php';
+```
+
+### Add repository and require to composer.json
+
+```
+"repositories": {
+    "ubiq-php": {
+        "type": "git",
+        "url": "https://gitlab.com/ubiqsecurity/ubiq-php.git"
+    }
+}
+
+"require": {
+    "ubiqsecurity/ubiq-php":"dev-master"
+}
+```
+
 ### Requirements
 
 The library has been tested with PHP 7.3.
 
-To use the library in your code, simply
-```php
-require '/path/to/Ubiq.php';
-```
 
 ## Usage
 
