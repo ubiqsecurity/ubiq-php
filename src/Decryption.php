@@ -28,35 +28,27 @@ class Decryption
     private $_key_raw, $_key_enc;
     private $_session, $_fingerprint;
     private $_algorithm, $_fragment;
-    private $_uses_cur;
+    private $_creds, $_dataset;
 
     private $_iv;
-
-    private $_baseurl;
-    private $_http;
-    private $_srsa;
 
     /**
      * Construct a new decryption object
      *
-     * No request can be made of the server, yet, because the key
-     * is attached to the data which has not yet been provided. This
-     * function sets up the http request object and stores the key
-     * from the credentials for later decryption of data from the
-     * server.
-     *
-     * @param Credentials $creds The credentials associated with the account
-     *                           used to obtain the key
+     * @param Credentials   $creds      The credentials associated with the account
+     *                                  used to obtain the key
+     * @param Dataset       $dataset    The dataset this operation is being performed on
+     *                                  Will default to NULL, which will be derived based on access
      */
-    public function __construct(Credentials $creds = null)
+    public function __construct(
+        Credentials $creds = NULL,
+        $dataset = NULL
+    )
     {
-        if ($creds) {
-            $this->_baseurl = $creds->getHost() . '/api/v0/decryption/key';
-            $this->_http = new Request(
-                $creds->getPapi(), $creds->getSapi()
-            );
-            $this->_srsa = $creds->getSrsa();
+        $this->_dataset = new Dataset($dataset);
+        $this->_creds = $creds;
 
+        if ($creds) {
             $this->_reset();
         }
     }
@@ -160,49 +152,13 @@ class Decryption
             }
         }
 
-        if (is_null($this->_key_enc)) {
-            $resp = $this->_http->post(
-                $this->_baseurl,
-                json_encode(
-                    array(
-                        'encrypted_data_key' => base64_encode(
-                            $header['key_enc']
-                        )
-                    )
-                ),
-                'application/json'
-            );
+        $key = $this->_creds->keycache->getDecryptionKey($this->_creds, $this->_dataset, $header);
 
-            if (!$resp) {
-                throw new \Exception(
-                    'Request for decryption key failed'
-                );
-            } else if ($resp['status'] != 200) {
-                throw new \Exception(
-                    'Request for decryption key returned ' . $resp['status']
-                );
-            }
-
-            $this->_algorithm   = new Algorithm($header['algoid']);
-
-            $json = json_decode($resp['content'], true);
-
-            $pkey = openssl_pkey_get_private(
-                $json['encrypted_private_key'], $this->_srsa
-            );
-            openssl_private_decrypt(
-                base64_decode($json['wrapped_data_key']),
-                $this->_key_raw,
-                $pkey,
-                OPENSSL_PKCS1_OAEP_PADDING
-            );
-            $this->_key_enc     = $header['key_enc'];
-            $this->_session     = $json['encryption_session'];
-            $this->_fingerprint = $json['key_fingerprint'];
-            $this->_uses_cur    = 0;
-        }
-
-        $this->_uses_cur++;
+        $this->_key_enc = $key['_key_enc'] ?? NULL;
+        $this->_key_raw = $key['_key_raw'] ?? NULL;
+        $this->_session = $key['_session'] ?? NULL;
+        $this->_fingerprint = $key['_fingerprint'] ?? NULL;
+        $this->_algorithm = $key['_algorithm'] ?? NULL;
         $this->_iv = $header['iv'];
 
         $aad = '';
@@ -217,7 +173,8 @@ class Decryption
 
         $pt = openssl_decrypt(
             $ciphertext,
-            $this->_algorithm->name, $this->_key_raw,
+            $this->_algorithm->name,
+            $this->_key_raw,
             OPENSSL_RAW_DATA,
             $this->_iv, $tag, $aad
         );
@@ -262,18 +219,7 @@ class Decryption
      */
     private function _reset() : void
     {
-        if ($this->_session && $this->_uses_cur > 0) {
-            $resp = $this->_http->patch(
-                $this->_baseurl . '/' .
-                $this->_fingerprint . '/' . $this->_session,
-                json_encode(
-                    array(
-                        'uses' => $this->_uses_cur
-                    )
-                ),
-                'application/json'
-            );
-        }
+        // report usage
 
         $this->_key_raw     = null;
         $this->_key_enc     = null;
@@ -281,7 +227,6 @@ class Decryption
         $this->_fingerprint = null;
         $this->_algorithm   = null;
         $this->_fragment    = null;
-        $this->_uses_cur    = 0;
     }
 
     /**
