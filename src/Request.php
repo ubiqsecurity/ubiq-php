@@ -133,12 +133,6 @@ class Request
         $curl = $this->_do($method, $url, $content, $ctype, false);
         $mh = curl_multi_init();
 
-        // // to debug with local proxy
-        // curl_setopt($curl, CURLOPT_PROXY, '127.0.0.1:8888');
-        // curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        // curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-
-
         curl_multi_add_handle($mh, $curl);
 
         do {
@@ -195,12 +189,6 @@ class Request
         curl_setopt($curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION);
 
         curl_setopt($curl, CURLOPT_URL, $url);
-
-        // // to debug with local proxy
-        // curl_setopt($curl, CURLOPT_PROXY, '127.0.0.1:8888');
-        // curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        // curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-
 
         if ($content) {
             array_push($headers, 'Expect:');
