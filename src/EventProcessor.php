@@ -34,6 +34,13 @@ class Event
     public $first_call_timestamp;
     public $last_call_timestamp;
 
+    /**
+     * Create an event object from an array
+     *
+     * @param array $event_data Data to create from
+     * 
+     * @return None
+     */
     public function __construct($event_data)
     {
         $this->first_call_timestamp = time();
@@ -48,6 +55,11 @@ class Event
         }
     }
 
+    /**
+     * Get a key (serialize) an event object
+     *
+     * @return The serialized data
+     */
     public function getKey()
     {
         return    "api_key='" . $this->api_key 
@@ -58,6 +70,11 @@ class Event
                 . "' key_number='" . $this->key_number . "'";
     }
 
+    /**
+     * Increment an event counter
+     *
+     * @return None
+     */
     public function increment()
     {
         $this->count++;
@@ -67,7 +84,6 @@ class Event
 
 /**
  * Public singleton to manage event processing
- * 
  *
  * @category Cryptography
  * @package  Ubiq-PHP
@@ -77,137 +93,185 @@ class Event
  */
 class EventProcessor
 {
-    protected static $_instance = NULL;
-    private static $creds = NULL;
-    private static $last_reported = NULL;
-    private static $processing = FALSE;
+    private static $_instance = null;
+    private static $_creds = null;
+    private static $_last_reported = null;
+    private static $_processing = false;
 
     const EVENT_TYPE_ENCRYPT = 'encrypt';
     const EVENT_TYPE_DECRYPT = 'decrypt';
 
-    public function setCredentials(&$creds)
+    /**
+     * Sets credentials to this object
+     * Needed because it doesn't have them in an instantiator
+     *
+     * @param Credentials $creds Credentials object
+     * 
+     * @return None
+     */
+    public function setCredentials(Credentials &$creds)
     {
-        self::$creds =& $creds;
+        self::$_creds =& $creds;
     }
 
+    /**
+     * Adds or increments an event in cache
+     *
+     * @param Event $event Event to add or increment
+     * 
+     * @return None
+     */
     public function addOrIncrement(Event $event)
     {
         $cache_manager = \Ubiq\CacheManager::getInstance();
         $event_idx = $event->getKey();
-        $cache_event = NULL;
+        $cache_event = null;
 
-        $cache_manager->setToReference(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $cache);
+        $cache_manager->setToReference(
+            CacheManager::CACHE_TYPE_EVENTS,
+            $event_idx,
+            $cache
+        );
 
         if (!empty($cache)) {
             $cache_event->increment();
 
-            ubiq_debug(self::$creds, 'Incrementing event count to ' . $cache_event->count . ' for ' . $event_idx);
-        }
-        else {
-            ubiq_debug(self::$creds, 'Initiating event with count 1 for ' . $event_idx);
+            ubiq_debug(self::$_creds, 'Incrementing event count to '. $cache_event->count . ' for ' . $event_idx);
+        } else {
+            ubiq_debug(self::$_creds, 'Initiating event with count 1 for ' . $event_idx);
 
             $cache_manager->set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
         }
 
-        if (empty(self::$last_reported)) {
-            self::$last_reported = time();
+        if (empty(self::$_last_reported)) {
+            self::$_last_reported = time();
         }
 
-        if ($this->_should_process()) {
+        if ($this->_shouldProcess()) {
             $this->process();
         }
     }
 
-    private function _should_process()
+    /**
+     * Whether or not the queue should process
+     *
+     * @return Bool
+     */
+    private function _shouldProcess()
     {
-        ubiq_debug(self::$creds, 'Evaluating whether to process events');
+        ubiq_debug(self::$_creds, 'Evaluating whether to process events');
 
-        if (self::$processing) {
-            ubiq_debug(self::$creds, 'Not processing; already running');
+        if (self::$_processing) {
+            ubiq_debug(self::$_creds, 'Not processing; already running');
 
-            return FALSE;
+            return false;
         }
 
-        if (time() - self::$last_reported > self::$creds->config['event_reporting']['flush_interval']) {
-            ubiq_debug(self::$creds, 'Processing; time of ' . self::$last_reported . ' to now exceeded threshold of ' . self::$creds->config['event_reporting']['flush_interval']);
+        if (time() - self::$_last_reported > self::$_creds->config['event_reporting']['flush_interval']
+        ) {
+            ubiq_debug(self::$_creds, 'Processing; time of ' . self::$_last_reported . ' to now exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
 
-            return TRUE;
+            return true;
         }
-        ubiq_debug(self::$creds, 'Not processing; time of ' . self::$last_reported . ' to now has not exceeded threshold of ' . self::$creds->config['event_reporting']['flush_interval']);
+        ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
 
         $cache_manager = \Ubiq\CacheManager::getInstance();
-        if ($cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$creds->config['event_reporting']['minimum_event_count']) {
-            ubiq_debug(self::$creds, 'Processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$creds->config['event_reporting']['minimum_event_count']);
 
-            return TRUE;
+        if ($cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
+        ) {
+            ubiq_debug(self::$_creds, 'Processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+
+            return true;
         }
-        ubiq_debug(self::$creds, 'Not processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$creds->config['event_reporting']['minimum_event_count']);
 
-        return FALSE;
+        ubiq_debug(self::$_creds, 'Not processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+
+        return false;
     }
 
-    public function process($async = TRUE)
+    /**
+     * Whether or not the queue should process
+     *
+     * @param Bool $async If the process should submit async or not
+     * 
+     * @return None
+     */
+    public function process(bool $async = true)
     {
 
-        if (self::$processing) {
-            ubiq_debug(self::$creds, 'Not processing; already running');
+        if (self::$_processing) {
+            ubiq_debug(self::$_creds, 'Not processing; already running');
 
-            return FALSE;
+            return false;
         }
         
-        ubiq_debug(self::$creds, 'Processing events ' . ($async ? 'asyncronously' : 'syncronously'));
-
-        // in case it takes longer than 2sec to prothis.endpoint = `/${this.restApiV3Root}/tracking/events`;cess
-        // avoid concurrent reporting
-        self::$processing = TRUE;
+        ubiq_debug(self::$_creds, 'Processing events ' . ($async ? 'asyncronously' : 'syncronously'));
 
         $cache_manager = \Ubiq\CacheManager::getInstance();
 
+        $events = $cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS);
+        $cache_manager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
+
+        if (empty($events)) {
+            ubiq_debug(self::$_creds, 'Not processing; no events to process');
+
+            return false;
+        }
+
+        // in case it takes longer than 2sec to process
+        // avoid concurrent reporting
+        self::$_processing = true;
+
+
         $http = new Request(
-            self::$creds->getPapi(),
-            self::$creds->getSapi()
+            self::$_creds->getPapi(),
+            self::$_creds->getSapi()
         );
 
         if ($async) {
             $resp = $http->postAsync(
-                self::$creds->getHost() . '/api/v3/tracking/events',
-                json_encode($cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS)),
+                self::$_creds->getHost() . '/api/v3/tracking/events',
+                json_encode($events),
                 'application/json'
             );
-        }
-        else {
+        } else {
             $resp = $http->post(
-                self::$creds->getHost() . '/api/v3/tracking/events',
-                json_encode($cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS)),
+                self::$_creds->getHost() . '/api/v3/tracking/events',
+                json_encode($events),
                 'application/json'
             );
         }
 
-        ubiq_debug(self::$creds, 'Clearing events and setting last reported time');
+        ubiq_debug(self::$_creds, 'Clearing events and setting last reported time');
 
-        $cache_manager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
-
-        self::$last_reported = time();
-        self::$processing = FALSE;
+        self::$_last_reported = time();
+        self::$_processing = false;
     }
 
     /**
      * Prevent direct object creation
      */
-    final private function __construct() { }
+    final private function __construct()
+    { 
+    }
 
     /**
      * Prevent object cloning
+     * 
+     * @return None
      */
-    final private function __clone() { }
+    final private function __clone()
+    { 
+    }
 
     /**
      * Returns new or existing Singleton instance
+     *
      * @return Singleton
      */
     final public static function getInstance()
     {
-        if (null !== static::$_instance){
+        if (null !== static::$_instance) {
             return static::$_instance;
         }
         static::$_instance = new static();
