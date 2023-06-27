@@ -13,7 +13,7 @@
 namespace Ubiq;
 
 /**
- * Public object in which to store Ubiq credentials
+ * Public object to manage key actions
  *
  * @category Cryptography
  * @package  Ubiq-PHP
@@ -21,72 +21,59 @@ namespace Ubiq;
  * @license  https://opensource.org/licenses/MIT MIT
  * @link     https://gitlab.com/ubiqsecurity/ubiq-php
  */
-class KeyCache
+class KeyManager
 {
-    // [
-    //     '_key_enc'      => DECODED encrypted data key
-    //     '_key_enc_prv'  => encrypted private key (for the wrapper)
-    //     '_key_raw'      => DECODED data key, either encrypted (wrapped) or decrypted based on config
-    //     '_session'      => encryption session
-    //     '_fingerprint'  => key fingerprint
-    //     '_algorithm'    => new Algorithm()
-    //     '_fragment'     => ['security_model']['enable_data_fragmentation']
-    // ]
-    public $cache = [];
 
-    // for use from encryption when it is not
     // an explicit key material to lookup
-    public function getKeyFromIndex($creds, $dataset, $idx)
+    public function getKeyDefault($creds, $dataset)
     {
-        return $this->getKey($creds, $dataset, $idx, TRUE);
+        $cache = $creds->cachemanager->get(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-default');
+        
+        if (!empty($cache)) {
+            ubiq_debug($creds, 'Found default key of ' . $cache['key_idx'] . ' for ' . $dataset->name);
+
+            return $this->getKey($creds, $dataset, $cache['_key_enc']);
+        }
+
+        return FALSE;        
     }
 
     // expects UNENCODED encrypted_data_key
-    public function getKey($creds, $dataset, $encrypted_data_key, $key_lookup_is_idx = FALSE)
+    public function getKey($creds, $dataset, $encrypted_data_key)
     {
         $key_idx = md5(base64_encode($encrypted_data_key));
 
-        if ($key_lookup_is_idx) {
-            if (array_key_exists($dataset->name, $this->cache)) {
-                if (array_key_exists('keys', $this->cache[$dataset->name])) {
-                    $key_idx = array_values($this->cache[$dataset->name]['keys'])[$encrypted_data_key]['key_idx'];
-
-                    ubiq_debug($creds, 'Using cached key for ' . $dataset->name . ' for index ' . $encrypted_data_key);
-                }
-            }
-        }
-
         ubiq_debug($creds, 'Looking for cached key for ' . $dataset->name . ' for key ' . $key_idx);
 
-        if (array_key_exists($dataset->name, $this->cache)) {
-            if (array_key_exists($key_idx, $this->cache[$dataset->name]['keys'])) {
-                ubiq_debug($creds, 'Found cached key for ' . $dataset->name . ' for key ' . $key_idx);
+        $cache = $creds->cachemanager->get(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $key_idx);
+        
+        if (!empty($cache)) {
+            ubiq_debug($creds, 'Found cached key for ' . $dataset->name . ' for key ' . $key_idx);
                 
-                $return = $this->cache[$dataset->name]['keys'][$key_idx];
+            $return = $cache;
 
-                // if caching and encrypting, decrypt the key
-                if ($creds->config['key_caching']['encrypt']) {
-                    ubiq_debug($creds, 'Cached keys are encrypted; decrypting prior to returning');
-                    
-                    $pkey = openssl_pkey_get_private(
-                        $this->cache[$dataset->name]['keys'][$key_idx]['_key_enc_prv'],
-                        $creds->getSrsa()
-                    );
+            // if caching and encrypting, decrypt the key
+            if ($creds->config['key_caching']['encrypt']) {
+                ubiq_debug($creds, 'Cached keys are encrypted; decrypting prior to returning');
+                
+                $pkey = openssl_pkey_get_private(
+                    $cache['_key_enc_prv'],
+                    $creds->getSrsa()
+                );
 
-                    $key_raw = NULL;
+                $key_raw = NULL;
 
-                    openssl_private_decrypt(
-                        $this->cache[$dataset->name]['keys'][$key_idx]['_key_raw'],
-                        $key_raw,
-                        $pkey,
-                        OPENSSL_PKCS1_OAEP_PADDING
-                    );
+                openssl_private_decrypt(
+                    $cache['_key_raw'],
+                    $key_raw,
+                    $pkey,
+                    OPENSSL_PKCS1_OAEP_PADDING
+                );
 
-                    $return['_key_raw'] = $key_raw;
-                }
-
-                return $return;
+                $return['_key_raw'] = $key_raw;
             }
+
+            return $return;
         }
 
         ubiq_debug($creds, 'Missed cached key for ' . $dataset->name . ' for key ' . $key_idx);
@@ -125,13 +112,11 @@ class KeyCache
                 $cache_data['_key_raw'] = $key_raw;
             }
 
-            if (!array_key_exists($dataset->name, $this->cache)) {
-                $this->cache[$dataset->name] = ['keys' => []];
-            }
-            $this->cache[$dataset->name]['keys'][$key_idx] = $cache_data;
+            $creds->cachemanager->set(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $key_idx, $cache_data);
         }
 
         $cache_data['_key_raw'] = $key_raw;
+        // print_r($creds->cachemanager::$caches);
         return $cache_data;
     }
 
@@ -151,7 +136,7 @@ class KeyCache
     public function getEncryptionKey(
         Credentials $creds = NULL,
         $dataset = NULL,
-        $nocache = TRUE,
+        $no_cache = TRUE,
         $encryption_key_rotation_idx = 0 // the default encryption key from cache to use
     )
     {
@@ -165,7 +150,7 @@ class KeyCache
             return;
         }
 
-        $cache = $this->getKeyFromIndex($creds, $dataset, $encryption_key_rotation_idx);
+        $cache = $this->getKeyDefault($creds, $dataset);
 
         if (empty($cache)) {
             ubiq_debug($creds, 'Getting encryption key from backend for ' . $dataset->name);
@@ -210,7 +195,12 @@ class KeyCache
             ubiq_debug($creds, 'Got encryption key from backend for ' . $dataset->name);
             
             // the return does decryption of key as needed
-            $cache = $this->cacheKey($creds, $dataset, $cache, $nocache);
+            $cache = $this->cacheKey($creds, $dataset, $cache, $no_cache);
+
+            // if we're caching an encryption key, also cache it as the default
+            if ($this->shouldCache($creds, $dataset) && !$no_cache) {
+                $creds->cachemanager->copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
+            }
         }
 
         ubiq_debug($creds, 'Finished getEncryptionKey for ' . $dataset->name);
@@ -286,14 +276,14 @@ class KeyCache
     }
 
     /**
-     * Construct the keycache object
+     * Construct the keymanager object
      */
     public function __construct()
     {
     }
 
     /**
-     * Destruct the keycache object
+     * Destruct the keymanager object
      */
     public function __destruct()
     {
