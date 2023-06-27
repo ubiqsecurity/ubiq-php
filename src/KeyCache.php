@@ -176,11 +176,7 @@ class KeyCache
 
             $resp = $http->post(
                 $creds->getHost() . '/api/v0/encryption/key',
-                json_encode(
-                    array(
-                        'uses' => 1
-                    )
-                ),
+                json_encode(['uses' => 1]),
                 'application/json'
             );
 

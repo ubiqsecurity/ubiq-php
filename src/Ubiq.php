@@ -69,9 +69,9 @@ function decrypt(Credentials $credentials, string $ciphertext, $dataset = NULL)
     return $pt;
 }
 
-function ubiq_debug(Credentials $creds, string $msg)
+function ubiq_debug($creds, string $msg)
 {
-    if ($creds->config['debug'] ?? FALSE) {
+    if (!empty($creds) && !empty($creds->config) && ($creds->config['debug'] ?? FALSE)) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
 }

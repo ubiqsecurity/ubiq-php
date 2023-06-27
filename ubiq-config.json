@@ -1,5 +1,5 @@
 {
-    "debug": true,
+    "debug": false,
     "event_reporting": {
         "wake_interval": 1,
         "minimum_count": 2,

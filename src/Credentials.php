@@ -96,8 +96,7 @@ class Credentials
     public static function getDefaultFileName()
         : ?string
     {
-        $homedir = '.';//posix_getpwuid(posix_geteuid())['dir'];
-        return $homedir . DIRECTORY_SEPARATOR . '.ubiq/credentials';
+        return __DIR__ . DIRECTORY_SEPARATOR . '.ubiq/credentials';
     }
 
     /**
