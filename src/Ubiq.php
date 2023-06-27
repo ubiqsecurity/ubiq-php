@@ -16,11 +16,13 @@ namespace Ubiq;
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE | E_STRICT);
 
 foreach (array('Algorithm.php',
+               'CacheManager.php',
                'Credentials.php',
                'Dataset.php',
                'Decryption.php',
                'Encryption.php',
-               'KeyCache.php',
+               'EventProcessor.php',
+               'KeyManager.php',
                'Request.php') as $file) {
     include implode(DIRECTORY_SEPARATOR, array(__DIR__, $file));
 }

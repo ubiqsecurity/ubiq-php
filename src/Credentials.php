@@ -22,7 +22,8 @@ class _Credentials
     public $srsa = null;
     public $host = null;
     public $config = null;
-    public $keycache = null;
+    public $keymanager = null;
+    public $cachemanager = null;
 
     /**
      * Determine if enough of the credentials properties are present to
@@ -312,6 +313,12 @@ class Credentials
 
         if (empty($config)) {
             $creds->config = [
+                'debug' => false,
+                'event_reporting' => [
+                    'minimum_event_count' => 5,
+                    'flush_interval' => 2,
+                    'destroy_report_async' => FALSE
+                ],
                 'key_caching' => [
                     'unstructured'  => FALSE,
                     'encrypt'       => FALSE,
@@ -322,7 +329,10 @@ class Credentials
             $this->config = json_decode($config, TRUE);
         }
 
-        $this->keycache = new \Ubiq\KeyCache();
+        $this->keymanager = new \Ubiq\KeyManager();
+        $this->cachemanager = \Ubiq\CacheManager::getInstance();
+        $this->eventprocessor = \Ubiq\EventProcessor::getInstance();
+        $this->eventprocessor->setCredentials($this);
     }
 
     /**
@@ -330,5 +340,7 @@ class Credentials
      */
     public function __destruct()
     {
+        // try to catch exiting
+        $this->eventprocessor->process($this->config['event_reporting']['destroy_report_async'] ?? FALSE);
     }
 }

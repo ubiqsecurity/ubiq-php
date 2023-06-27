@@ -45,8 +45,12 @@ class Decryption
         $dataset = NULL
     )
     {
-        $this->_dataset = new Dataset($dataset);
+        if (!Dataset::isDataset($dataset)) {
+            $dataset = new Dataset($dataset);
+        }
+
         $this->_creds = $creds;
+        $this->_dataset = $dataset;
 
         if ($creds) {
             $this->_reset();
@@ -67,6 +71,15 @@ class Decryption
                 'Decryption already in progress'
             );
         }
+
+        $this->_creds->eventprocessor->addOrIncrement(new Event([
+            'api_key'                   => $this->_creds->getPapi(),
+            'dataset_name'              => $this->_dataset->name,
+            'dataset_group_name'        => $this->_dataset->group_name,
+            'billing_action'            => EventProcessor::EVENT_TYPE_DECRYPT,
+            'dataset_type'              => $this->_dataset->type,
+            'key_number'                => 0,
+        ]));
 
         $this->_iv = '';
 
@@ -152,7 +165,7 @@ class Decryption
             }
         }
 
-        $key = $this->_creds->keycache->getDecryptionKey($this->_creds, $this->_dataset, $header);
+        $key = $this->_creds->keymanager->getDecryptionKey($this->_creds, $this->_dataset, $header);
 
         $this->_key_enc = $key['_key_enc'] ?? NULL;
         $this->_key_raw = $key['_key_raw'] ?? NULL;

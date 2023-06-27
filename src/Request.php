@@ -62,7 +62,7 @@ class Request
         $created = time();
         $headers['(created)'] = strval($created);
         $headers['Date'] = date('D, d M Y H:i:s', $created-$offset) . ' GMT';
-        
+
         $headers['Host'] = $urlparts['host'];
         if (($urlparts['scheme'] == 'http'
              // @codingStandardsIgnoreLine
@@ -119,6 +119,59 @@ class Request
     }
 
     /**
+     * Do an http/s request async
+     *
+     * @param string $method  One of 'GET', 'POST', etc.
+     * @param string $url     The URL to which to make the request
+     * @param string $content Content to be sent to the server or null
+     * @param string $ctype   The content type
+     *
+     * @return A multicurl handle
+     *
+     */
+    public function _do_async(
+        string $method,
+        string $url,
+        ?string $content,
+        ?string $ctype
+    )
+    {
+        $curl = $this->_do($method, $url, $content, $ctype, FALSE);
+        $mh = curl_multi_init();
+
+        // // to debug with local proxy
+        // curl_setopt($curl, CURLOPT_PROXY, '127.0.0.1:8888');
+        // curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        // curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+
+
+        curl_multi_add_handle($mh, $curl);
+
+        do {
+
+            $mrc = curl_multi_exec($mh, $active);
+            $mrs = curl_multi_select($mh);
+
+            // not needed because of the usleep(15) below
+            // if ($mrs == -1) {
+            //     usleep(1);
+            // }
+
+            // normal curl takes 400+ ms
+            // socket writing takes ~ 100ms but is a lot of code overhead
+            // like https://stackoverflow.com/questions/14587514/php-fire-and-forget-post-request
+            // this takes ~ 180ms but is simple
+            // #TODO make PHP multithread?
+            usleep(15);
+
+            // echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $mrc . '------' . $mrs . '------' . $active . PHP_EOL;
+
+        } while ($mrs == 1 && ($mrc == CURLM_CALL_MULTI_PERFORM || $active == 1));
+
+        return $curl;
+    }
+
+    /**
      * Do an http/s request
      *
      * @param string $method  One of 'GET', 'POST', etc.
@@ -130,26 +183,35 @@ class Request
      *         'content' or false
      */
     private function _do(
-        string $method, string $url,
-        ?string $content, ?string $ctype
+        string $method,
+        string $url,
+        ?string $content,
+        ?string $ctype,
+        bool $execute = TRUE
     ) {
         $ret = false;
         $headers = array();
         $response = '';
 
-        curl_reset($this->_curl);
-        curl_setopt(
-            $this->_curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION
-        );
-        
-        curl_setopt($this->_curl, CURLOPT_URL, $url);
+        $curl = curl_init();
+
+        curl_reset($curl);
+        curl_setopt($curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION);
+
+        curl_setopt($curl, CURLOPT_URL, $url);
+
+        // // to debug with local proxy
+        // curl_setopt($curl, CURLOPT_PROXY, '127.0.0.1:8888');
+        // curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        // curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+
 
         if ($content) {
             array_push($headers, 'Expect:');
-            curl_setopt($this->_curl, CURLOPT_UPLOAD, true);
-            curl_setopt($this->_curl, CURLOPT_INFILESIZE, strlen($content));
+            curl_setopt($curl, CURLOPT_UPLOAD, true);
+            curl_setopt($curl, CURLOPT_INFILESIZE, strlen($content));
             curl_setopt(
-                $this->_curl, CURLOPT_READFUNCTION,
+                $curl, CURLOPT_READFUNCTION,
                 /* this function will consume $content */
                 function ($curl, $rsrc, $length) use (&$content) {
                     $ret = substr($content, 0, $length);
@@ -159,9 +221,9 @@ class Request
             );
         }
 
-        curl_setopt($this->_curl, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt(
-            $this->_curl, CURLOPT_WRITEFUNCTION,
+            $curl, CURLOPT_WRITEFUNCTION,
             function ($curl, $data) use (&$response) {
                 $response .= $data;
                 return strlen($data);
@@ -178,11 +240,21 @@ class Request
             }
         }
 
-        curl_setopt($this->_curl, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+
+        if (!$execute) {
+            return $curl;
+        }
+
+        $this->_curl = $curl;
 
         curl_exec($this->_curl);
         $i = curl_getinfo($this->_curl);
         $e = curl_error($this->_curl);
+
+        // print_r($i);
+        // print_r($e);
+        // echo $url;
 
         if (!curl_error($this->_curl)) {
             $ret = array(
@@ -228,6 +300,21 @@ class Request
         return $this->_do('POST', $url, $content, $ctype);
     }
 
+    /**
+     * Do an http/s POST request asyncronously
+     *
+     * @param string $url     The URL to which to make the request
+     * @param string $content Content to be sent to the server or null
+     * @param string $ctype   The content type
+     *
+     * @return An associative array containing 'status', 'content_type', and
+     *         'content' or false
+     */
+    public function postAsync(
+        string $url, string $content, string $ctype = 'text/plain'
+    ) {
+        return $this->_do_async('POST', $url, $content, $ctype);
+    }
     /**
      * Do an http/s PATCH request
      *
