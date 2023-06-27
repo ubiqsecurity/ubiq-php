@@ -27,16 +27,22 @@ class Dataset
     public $group_name;
     public $type;
 
+    /**
+     * Create a dataset
+     *
+     * @param string $dataset_name       Optional name
+     * @param string $dataset_group_name Optional name
+     * 
+     * @return None
+     */
     public function __construct(
         ?string $dataset_name,
-        ?strign $dataset_group_name = NULL
-    )
-    {
+        ?strign $dataset_group_name = null
+    ) {
         if (empty($dataset_name)) {
             $this->name = 'unnamed dataset';
             $this->type = DATASET_TYPE_UNSTRUCTURED;
-        }
-        else {
+        } else {
             $this->name = $dataset_name;
             $this->type = DATASET_TYPE_UNSTRUCTURED;
         }
@@ -44,19 +50,26 @@ class Dataset
         $this->group_name = $dataset_group_name;
 
     }
-
+    
+    /**
+     * Whether or not something is a dataset
+     *
+     * @param string $o The thing to evaluate
+     * 
+     * @return Bool
+     */
     public static function isDataset($o)
     {
         if (empty($o)) {
-            return FALSE;
+            return false;
         }
         if (!is_object($o)) {
-            return FALSE;
+            return false;
         }
         if (get_class($o) != 'Dataset') {
-            return FALSE;
+            return false;
         }
 
-        return TRUE;
+        return true;
     }
 }

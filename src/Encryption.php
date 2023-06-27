@@ -43,17 +43,17 @@ class Encryption
      *
      * Failures result in exceptions being thrown
      *
-     * @param Credentials   $creds          The credentials associated with the account
-     *                                      used to obtain the key
-     * @param Dataset       $dataset        The dataset this operation is being performed on
-     *                                      Will default to NULL, which will be derived based on access
-     * @param Bool          $multiple_uses  Whether or not the encryption key should be re-used
-     * 
+     * @param Credentials $creds         The credentials associated with the account
+     *                                   used to obtain the key
+     * @param var         $dataset       The dataset this operation is for
+     *                                   Will default to null, which will be derived
+     *                                   based on access
+     * @param Bool        $multiple_uses If the encryption key should be re-used
      */
     public function __construct(
-        Credentials $creds = NULL,
-        $dataset = NULL,
-        $multiple_uses = FALSE
+        Credentials $creds = null,
+        $dataset = null,
+        $multiple_uses = false
     ) {
         if (!Dataset::isDataset($dataset)) {
             $dataset = new Dataset($dataset);
@@ -62,15 +62,19 @@ class Encryption
         ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' uses');
 
         if ($creds) {
-            $key = $creds->keymanager->getEncryptionKey($creds, $dataset, !$multiple_uses);
+            $key = $creds->keymanager->getEncryptionKey(
+                $creds,
+                $dataset,
+                !$multiple_uses
+            );
         }
 
-        $this->_key_enc = $key['_key_enc'] ?? NULL;
-        $this->_key_raw = $key['_key_raw'] ?? NULL;
-        $this->_session = $key['_session'] ?? NULL;
-        $this->_fingerprint = $key['_fingerprint'] ?? NULL;
-        $this->_algorithm = $key['_algorithm'] ?? NULL;
-        $this->_fragment = $key['_fragment'] ?? NULL;
+        $this->_key_enc = $key['_key_enc'] ?? null;
+        $this->_key_raw = $key['_key_raw'] ?? null;
+        $this->_session = $key['_session'] ?? null;
+        $this->_fingerprint = $key['_fingerprint'] ?? null;
+        $this->_algorithm = $key['_algorithm'] ?? null;
+        $this->_fragment = $key['_fragment'] ?? null;
         
         $this->_dataset = $dataset;
         $this->_creds = $creds;
@@ -90,14 +94,18 @@ class Encryption
             );
         }
 
-        $this->_creds->eventprocessor->addOrIncrement(new Event([
-            'api_key'                   => $this->_creds->getPapi(),
-            'dataset_name'              => $this->_dataset->name,
-            'dataset_group_name'        => $this->_dataset->group_name,
-            'billing_action'            => EventProcessor::EVENT_TYPE_ENCRYPT,
-            'dataset_type'              => $this->_dataset->type,
-            'key_number'                => 0,
-        ]));
+        $this->_creds->eventprocessor->addOrIncrement(
+            new Event(
+                [
+                'api_key'                   => $this->_creds->getPapi(),
+                'dataset_name'              => $this->_dataset->name,
+                'dataset_group_name'        => $this->_dataset->group_name,
+                'billing_action'            => EventProcessor::EVENT_TYPE_ENCRYPT,
+                'dataset_type'              => $this->_dataset->type,
+                'key_number'                => 0,
+                ]
+            )
+        );
 
         /*
          * there is an openssl_random_pseudo_bytes() function,

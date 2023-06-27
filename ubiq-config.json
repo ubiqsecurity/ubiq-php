@@ -1,8 +1,9 @@
 {
-    "debug": true,
+    "debug": false,
     "event_reporting": {
         "minimum_event_count": 5,
-        "flush_interval": 2
+        "flush_interval": 2,
+        "destroy_report_async": false
     },
     "key_caching" : {
         "unstructured": true,

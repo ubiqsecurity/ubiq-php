@@ -65,15 +65,11 @@ class Request
 
         $headers['Host'] = $urlparts['host'];
         if (($urlparts['scheme'] == 'http'
-             // @codingStandardsIgnoreLine
-             && array_key_exists('port', $urlparts)
-             // @codingStandardsIgnoreLine
-             && $urlparts['port'] != 80)
+            && array_key_exists('port', $urlparts)
+            && $urlparts['port'] != 80)  
             || ($urlparts['scheme'] == 'https'
-                // @codingStandardsIgnoreLine
-                && array_key_exists('port', $urlparts)
-                // @codingStandardsIgnoreLine
-                && $urlparts['port'] != 443)
+            && array_key_exists('port', $urlparts)
+            && $urlparts['port'] != 443)
         ) {
             $headers['Host'] .= ':' . strval($urlparts['port']);
         }
@@ -127,16 +123,14 @@ class Request
      * @param string $ctype   The content type
      *
      * @return A multicurl handle
-     *
      */
-    public function _do_async(
+    private function _doAsync(
         string $method,
         string $url,
         ?string $content,
         ?string $ctype
-    )
-    {
-        $curl = $this->_do($method, $url, $content, $ctype, FALSE);
+    ) {
+        $curl = $this->_do($method, $url, $content, $ctype, false);
         $mh = curl_multi_init();
 
         // // to debug with local proxy
@@ -164,7 +158,8 @@ class Request
             // #TODO make PHP multithread?
             usleep(15);
 
-            // echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $mrc . '------' . $mrs . '------' . $active . PHP_EOL;
+            // echo (new \DateTime())->format('Y-m-d H:i:s.v ')
+            // . $mrc . '------' . $mrs . '------' . $active . PHP_EOL;
 
         } while ($mrs == 1 && ($mrc == CURLM_CALL_MULTI_PERFORM || $active == 1));
 
@@ -178,6 +173,7 @@ class Request
      * @param string $url     The URL to which to make the request
      * @param string $content Content to be sent to the server or null
      * @param string $ctype   The content type
+     * @param bool   $execute Whether or not to execute the curl or return the handle
      *
      * @return An associative array containing 'status', 'content_type', and
      *         'content' or false
@@ -187,7 +183,7 @@ class Request
         string $url,
         ?string $content,
         ?string $ctype,
-        bool $execute = TRUE
+        bool $execute = true
     ) {
         $ret = false;
         $headers = array();
@@ -313,7 +309,7 @@ class Request
     public function postAsync(
         string $url, string $content, string $ctype = 'text/plain'
     ) {
-        return $this->_do_async('POST', $url, $content, $ctype);
+        return $this->_doAsync('POST', $url, $content, $ctype);
     }
     /**
      * Do an http/s PATCH request

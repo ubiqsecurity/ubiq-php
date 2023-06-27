@@ -36,13 +36,19 @@ const DATASET_TYPE_UNSTRUCTURED = 'unstructured';
 /**
  * Encrypt a given plaintext
  *
- * @param object $credentials The credentials object
- * @param string $plaintext   The plaintext data to be encrypted
+ * @param object $credentials   The credentials object
+ * @param string $plaintext     The plaintext data to be encrypted
+ * @param string $dataset       The dataset being encrypted on
+ * @param bool   $multiple_uses Whether or not this should cache
  *
  * @return string Returns an encryption of the plaintext
  */
-function encrypt(Credentials $credentials, string $plaintext, $dataset = NULL, $multiple_uses = FALSE)
-{
+function encrypt(
+    Credentials $credentials,
+    string $plaintext,
+    $dataset = null,
+    $multiple_uses = false
+) {
     $enc = new Encryption($credentials, $dataset, $multiple_uses);
 
     $ct  = $enc->begin();
@@ -57,10 +63,11 @@ function encrypt(Credentials $credentials, string $plaintext, $dataset = NULL, $
  *
  * @param object $credentials The credentials object
  * @param string $ciphertext  The cipher data to be decrypted
+ * @param string $dataset     The dataset being decrypted
  *
  * @return string Returns an decryption of the ciphertext
  */
-function decrypt(Credentials $credentials, string $ciphertext, $dataset = NULL)
+function decrypt(Credentials $credentials, string $ciphertext, $dataset = null)
 {
     $dec = new Decryption($credentials, $dataset);
 
@@ -71,9 +78,21 @@ function decrypt(Credentials $credentials, string $ciphertext, $dataset = NULL)
     return $pt;
 }
 
-function ubiq_debug($creds, string $msg)
+/**
+ * Debug output
+ *
+ * @param object $credentials The credentials object
+ * @param string $message     Debug
+ *
+ * @return None
+ */
+// @codingStandardsIgnoreLine
+function ubiq_debug(Credentials $creds, string $msg)
 {
-    if (!empty($creds) && !empty($creds->config) && ($creds->config['debug'] ?? FALSE)) {
+    if (!empty($creds)
+        && !empty($creds->config)
+        && ($creds->config['debug'] ?? false)
+    ) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
 }

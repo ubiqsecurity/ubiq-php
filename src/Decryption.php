@@ -35,16 +35,16 @@ class Decryption
     /**
      * Construct a new decryption object
      *
-     * @param Credentials   $creds      The credentials associated with the account
-     *                                  used to obtain the key
-     * @param Dataset       $dataset    The dataset this operation is being performed on
-     *                                  Will default to NULL, which will be derived based on access
+     * @param Credentials $creds   The credentials associated with the account
+     *                             used to obtain the key
+     * @param var         $dataset The dataset this operation is being performed on
+     *                             Will default to null, which will be derived
+     *                             based on access
      */
     public function __construct(
-        Credentials $creds = NULL,
-        $dataset = NULL
-    )
-    {
+        Credentials $creds = null,
+        $dataset = null
+    ) {
         if (!Dataset::isDataset($dataset)) {
             $dataset = new Dataset($dataset);
         }
@@ -72,14 +72,18 @@ class Decryption
             );
         }
 
-        $this->_creds->eventprocessor->addOrIncrement(new Event([
-            'api_key'                   => $this->_creds->getPapi(),
-            'dataset_name'              => $this->_dataset->name,
-            'dataset_group_name'        => $this->_dataset->group_name,
-            'billing_action'            => EventProcessor::EVENT_TYPE_DECRYPT,
-            'dataset_type'              => $this->_dataset->type,
-            'key_number'                => 0,
-        ]));
+        $this->_creds->eventprocessor->addOrIncrement(
+            new Event(
+                [
+                'api_key'                   => $this->_creds->getPapi(),
+                'dataset_name'              => $this->_dataset->name,
+                'dataset_group_name'        => $this->_dataset->group_name,
+                'billing_action'            => EventProcessor::EVENT_TYPE_DECRYPT,
+                'dataset_type'              => $this->_dataset->type,
+                'key_number'                => 0,
+                ]
+            )
+        );
 
         $this->_iv = '';
 
@@ -110,11 +114,7 @@ class Decryption
         $header = unpack(
             'Cversion/Cflags/Calgoid/Civlen/nkeylen', $ciphertext
         );
-        if (!$header
-            || (strlen($ciphertext) <
-                // @codingStandardsIgnoreLine
-                6 + $header['ivlen'] + $header['keylen'])
-        ) {
+        if (!$header || (strlen($ciphertext) < 6 + $header['ivlen'] + $header['keylen'])) {
             throw new \Exception(
                 'failed to parse ciphertext header'
             );
@@ -165,13 +165,17 @@ class Decryption
             }
         }
 
-        $key = $this->_creds->keymanager->getDecryptionKey($this->_creds, $this->_dataset, $header);
+        $key = $this->_creds->keymanager->getDecryptionKey(
+            $this->_creds,
+            $this->_dataset,
+            $header
+        );
 
-        $this->_key_enc = $key['_key_enc'] ?? NULL;
-        $this->_key_raw = $key['_key_raw'] ?? NULL;
-        $this->_session = $key['_session'] ?? NULL;
-        $this->_fingerprint = $key['_fingerprint'] ?? NULL;
-        $this->_algorithm = $key['_algorithm'] ?? NULL;
+        $this->_key_enc = $key['_key_enc'] ?? null;
+        $this->_key_raw = $key['_key_raw'] ?? null;
+        $this->_session = $key['_session'] ?? null;
+        $this->_fingerprint = $key['_fingerprint'] ?? null;
+        $this->_algorithm = $key['_algorithm'] ?? null;
         $this->_iv = $header['iv'];
 
         $aad = '';
