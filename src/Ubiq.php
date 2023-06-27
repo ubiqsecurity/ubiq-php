@@ -87,7 +87,7 @@ function decrypt(Credentials $credentials, string $ciphertext, $dataset = null)
  * @return None
  */
 // @codingStandardsIgnoreLine
-function ubiq_debug(Credentials $creds, string $msg)
+function ubiq_debug(?Credentials $creds, string $msg)
 {
     if (!empty($creds)
         && !empty($creds->config)
