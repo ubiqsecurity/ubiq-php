@@ -26,13 +26,23 @@ class Event
     public $api_key;
     public $dataset_name;
     public $dataset_group_name;
-    public $billing_action;
+    public $action;
     public $dataset_type;
     public $key_number;
 
     public $count;
     public $first_call_timestamp;
     public $last_call_timestamp;
+
+    // maps attribute names to their names when serializing
+    const SERIALIZE_MAP = [
+        'api_key'               => 'api_key',
+        'dataset_name'          => 'datasets',
+        'dataset_group_name'    => 'dataset_groups',
+        'action'                => 'action',
+        'dataset_type'          => 'dataset_type',
+        'key_number'            => 'key_number',
+    ];
 
     /**
      * Create an event object from an array
@@ -62,12 +72,11 @@ class Event
      */
     public function getKey()
     {
-        return    "api_key='" . $this->api_key 
-                . "' datasets='" . $this->dataset_name
-                . "' billing_action='" . $this->billing_action
-                . "' dataset_groups='" . $this->dataset_group_name
-                . "' dataset_type='" . $this->dataset_type
-                . "' key_number='" . $this->key_number . "'";
+        $string = '';
+        foreach (self::SERIALIZE_MAP as $attribute => $key) {
+            $string .= $key . "='" . $this->{$attribute} . "' ";
+        }
+        return trim($string);
     }
 
     /**
@@ -127,13 +136,12 @@ class EventProcessor
         $event_idx = $event->getKey();
         $cache_event = null;
 
-        $cache_manager->setToReference(
+        $cache_event = $cache_manager->getReference(
             CacheManager::CACHE_TYPE_EVENTS,
-            $event_idx,
-            $cache
+            $event_idx
         );
 
-        if (!empty($cache)) {
+        if (!empty($cache_event)) {
             $cache_event->increment();
 
             ubiq_debug(self::$_creds, 'Incrementing event count to '. $cache_event->count . ' for ' . $event_idx);
@@ -209,10 +217,24 @@ class EventProcessor
 
         $cache_manager = \Ubiq\CacheManager::getInstance();
 
-        $events = $cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS);
+        $cached_events = $cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS);
         $cache_manager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
 
-        if (empty($events)) {
+        // format for reporting
+        $events = [];
+        foreach ($cached_events as $cached_event) {
+            $event = (array)$cached_event;
+            $event['first_call_timestamp'] = (new \DateTime())->setTimestamp($event['first_call_timestamp'])->format('c');
+            $event['last_call_timestamp'] = (new \DateTime())->setTimestamp($event['last_call_timestamp'])->format('c');
+            $event['product'] = \Ubiq\LIBRARY;
+            $event['product_version'] = \Ubiq\VERSION;
+            $event['user-agent'] = \Ubiq\LIBRARY . '/' . \Ubiq\VERSION;
+            $event['api_version'] = \Ubiq\API_VERSION;
+            $events[] = $event;
+        }
+        $events = ['usage' => $events];
+
+        if (empty($events['usage'])) {
             ubiq_debug(self::$_creds, 'Not processing; no events to process');
 
             return false;
@@ -241,6 +263,8 @@ class EventProcessor
                 'application/json'
             );
         }
+
+        ubiq_debug(self::$_creds, 'Processed ' . sizeof($events['usage']) . ' events');
 
         ubiq_debug(self::$_creds, 'Clearing events and setting last reported time');
 
