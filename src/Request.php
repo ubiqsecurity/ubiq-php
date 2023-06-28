@@ -133,6 +133,9 @@ class Request
         $curl = $this->_do($method, $url, $content, $ctype, false);
         $mh = curl_multi_init();
 
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+
         curl_multi_add_handle($mh, $curl);
 
         do {
@@ -149,13 +152,14 @@ class Request
             // socket writing takes ~ 100ms but is a lot of code overhead
             // like https://stackoverflow.com/questions/14587514/php-fire-and-forget-post-request
             // this takes ~ 180ms but is simple
+            // but weirdly, it only works when running through a proxy
+            // without a proxy, we need to wait for $active == 0 (the request to fully process)
+            // so we might as well then do a normal curl
             // #TODO make PHP multithread?
             usleep(15);
 
-            // echo (new \DateTime())->format('Y-m-d H:i:s.v ')
-            // . $mrc . '------' . $mrs . '------' . $active . PHP_EOL;
 
-        } while ($mrs == 1 && ($mrc == CURLM_CALL_MULTI_PERFORM || $active == 1));
+        } while ($active == 1); //$mrs == 1 && ($mrc == CURLM_CALL_MULTI_PERFORM || $active == 1));
 
         return $curl;
     }
@@ -186,7 +190,7 @@ class Request
         $curl = curl_init();
 
         curl_reset($curl);
-        curl_setopt($curl, CURLOPT_USERAGENT, 'ubiq-php/' . \Ubiq\VERSION);
+        curl_setopt($curl, CURLOPT_USERAGENT, \Ubiq\LIBRARY . '/' . \Ubiq\VERSION);
 
         curl_setopt($curl, CURLOPT_URL, $url);
 

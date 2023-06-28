@@ -1,5 +1,5 @@
 {
-    "debug": false,
+    "debug": true,
     "event_reporting": {
         "minimum_event_count": 5,
         "flush_interval": 2,

@@ -28,6 +28,8 @@ foreach (array('Algorithm.php',
 }
 
 const VERSION = '0.1.0';
+const LIBRARY = 'ubiq-php';
+const API_VERSION = 'V3';
 const HEADER_V0_FLAG_AAD = 1;
 const DATASET_TYPE_STRUCTURED = 'structured';
 const DATASET_TYPE_UNSTRUCTURED = 'unstructured';

@@ -106,15 +106,14 @@ class CacheManager
     }
 
     /**
-     * Set a variable to a cache result
+     * Get reference to cache result
      *
      * @param string $cache_type The cache type to get
      * @param string $key        The key to search for
-     * @param string $return     The variable to set
      * 
-     * @return None
+     * @return Reference to cache result
      */
-    public function setToReference(string $cache_type, string $key, &$return)
+    public function getReference(string $cache_type, string $key)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             $return = false;
@@ -129,6 +128,8 @@ class CacheManager
         }
 
         $return =& self::$caches[$cache_type][$key];
+
+        return $return;
     }
 
     /**

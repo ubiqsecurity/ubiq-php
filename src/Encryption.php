@@ -95,16 +95,14 @@ class Encryption
         }
 
         $this->_creds->eventprocessor->addOrIncrement(
-            new Event(
-                [
+            new Event([
                 'api_key'                   => $this->_creds->getPapi(),
                 'dataset_name'              => $this->_dataset->name,
                 'dataset_group_name'        => $this->_dataset->group_name,
-                'billing_action'            => EventProcessor::EVENT_TYPE_ENCRYPT,
+                'action'                    => EventProcessor::EVENT_TYPE_ENCRYPT,
                 'dataset_type'              => $this->_dataset->type,
                 'key_number'                => 0,
-                ]
-            )
+            ])
         );
 
         /*
