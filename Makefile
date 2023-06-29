@@ -8,7 +8,8 @@ test: cs
 
 cs:
 	$(QUIET)-./vendor/squizlabs/php_codesniffer/bin/phpcs \
-	  src/ tests/ examples/ \
+	  src/ tests/ \
+	  --standard=phpcsruleset.xml \
 	  --report=full \
 	  --report-\\Micheh\\PhpCodeSniffer\\Report\\Gitlab=phpcs.json
 

@@ -28,35 +28,31 @@ class Decryption
     private $_key_raw, $_key_enc;
     private $_session, $_fingerprint;
     private $_algorithm, $_fragment;
-    private $_uses_cur;
+    private $_creds, $_dataset;
 
     private $_iv;
-
-    private $_baseurl;
-    private $_http;
-    private $_srsa;
 
     /**
      * Construct a new decryption object
      *
-     * No request can be made of the server, yet, because the key
-     * is attached to the data which has not yet been provided. This
-     * function sets up the http request object and stores the key
-     * from the credentials for later decryption of data from the
-     * server.
-     *
-     * @param Credentials $creds The credentials associated with the account
-     *                           used to obtain the key
+     * @param Credentials $creds   The credentials associated with the account
+     *                             used to obtain the key
+     * @param var         $dataset The dataset this operation is being performed on
+     *                             Will default to null, which will be derived
+     *                             based on access
      */
-    public function __construct(Credentials $creds = null)
-    {
-        if ($creds) {
-            $this->_baseurl = $creds->getHost() . '/api/v0/decryption/key';
-            $this->_http = new Request(
-                $creds->getPapi(), $creds->getSapi()
-            );
-            $this->_srsa = $creds->getSrsa();
+    public function __construct(
+        Credentials $creds = null,
+        $dataset = null
+    ) {
+        if (!Dataset::isDataset($dataset)) {
+            $dataset = new Dataset($dataset);
+        }
 
+        $this->_creds = $creds;
+        $this->_dataset = $dataset;
+
+        if ($creds) {
             $this->_reset();
         }
     }
@@ -75,6 +71,17 @@ class Decryption
                 'Decryption already in progress'
             );
         }
+
+        $this->_creds->eventprocessor->addOrIncrement(
+            new Event([
+                'api_key'                   => $this->_creds->getPapi(),
+                'dataset_name'              => $this->_dataset->name,
+                'dataset_group_name'        => $this->_dataset->group_name,
+                'action'                    => EventProcessor::EVENT_TYPE_DECRYPT,
+                'dataset_type'              => $this->_dataset->type,
+                'key_number'                => 0,
+            ])
+        );
 
         $this->_iv = '';
 
@@ -105,11 +112,7 @@ class Decryption
         $header = unpack(
             'Cversion/Cflags/Calgoid/Civlen/nkeylen', $ciphertext
         );
-        if (!$header
-            || (strlen($ciphertext) <
-                // @codingStandardsIgnoreLine
-                6 + $header['ivlen'] + $header['keylen'])
-        ) {
+        if (!$header || (strlen($ciphertext) < 6 + $header['ivlen'] + $header['keylen'])) {
             throw new \Exception(
                 'failed to parse ciphertext header'
             );
@@ -160,49 +163,17 @@ class Decryption
             }
         }
 
-        if (is_null($this->_key_enc)) {
-            $resp = $this->_http->post(
-                $this->_baseurl,
-                json_encode(
-                    array(
-                        'encrypted_data_key' => base64_encode(
-                            $header['key_enc']
-                        )
-                    )
-                ),
-                'application/json'
-            );
+        $key = $this->_creds->keymanager->getDecryptionKey(
+            $this->_creds,
+            $this->_dataset,
+            $header
+        );
 
-            if (!$resp) {
-                throw new \Exception(
-                    'Request for decryption key failed'
-                );
-            } else if ($resp['status'] != 200) {
-                throw new \Exception(
-                    'Request for decryption key returned ' . $resp['status']
-                );
-            }
-
-            $this->_algorithm   = new Algorithm($header['algoid']);
-
-            $json = json_decode($resp['content'], true);
-
-            $pkey = openssl_pkey_get_private(
-                $json['encrypted_private_key'], $this->_srsa
-            );
-            openssl_private_decrypt(
-                base64_decode($json['wrapped_data_key']),
-                $this->_key_raw,
-                $pkey,
-                OPENSSL_PKCS1_OAEP_PADDING
-            );
-            $this->_key_enc     = $header['key_enc'];
-            $this->_session     = $json['encryption_session'];
-            $this->_fingerprint = $json['key_fingerprint'];
-            $this->_uses_cur    = 0;
-        }
-
-        $this->_uses_cur++;
+        $this->_key_enc = $key['_key_enc'] ?? null;
+        $this->_key_raw = $key['_key_raw'] ?? null;
+        $this->_session = $key['_session'] ?? null;
+        $this->_fingerprint = $key['_fingerprint'] ?? null;
+        $this->_algorithm = $key['_algorithm'] ?? null;
         $this->_iv = $header['iv'];
 
         $aad = '';
@@ -217,7 +188,8 @@ class Decryption
 
         $pt = openssl_decrypt(
             $ciphertext,
-            $this->_algorithm->name, $this->_key_raw,
+            $this->_algorithm->name,
+            $this->_key_raw,
             OPENSSL_RAW_DATA,
             $this->_iv, $tag, $aad
         );
@@ -262,18 +234,7 @@ class Decryption
      */
     private function _reset() : void
     {
-        if ($this->_session && $this->_uses_cur > 0) {
-            $resp = $this->_http->patch(
-                $this->_baseurl . '/' .
-                $this->_fingerprint . '/' . $this->_session,
-                json_encode(
-                    array(
-                        'uses' => $this->_uses_cur
-                    )
-                ),
-                'application/json'
-            );
-        }
+        // report usage
 
         $this->_key_raw     = null;
         $this->_key_enc     = null;
@@ -281,7 +242,6 @@ class Decryption
         $this->_fingerprint = null;
         $this->_algorithm   = null;
         $this->_fragment    = null;
-        $this->_uses_cur    = 0;
     }
 
     /**
