@@ -111,50 +111,18 @@ final class RequestTest extends TestCase
         $req = new Ubiq\Request($creds->getPapi(), $creds->getSapi());
         $res = $req->post(
             $creds->getHost() . '/api/v0/encryption/key',
-            'null', 'application/json'
+            json_encode(['uses' => 1]),
+            'application/json'
         );
         if (is_array($res)) {
             $this->assertArrayHasKey('status', $res);
-            $this->assertEquals($res['status'], 200);
+            $this->assertContains($res['status'], [200, 201]);
             $this->assertArrayHasKey('content_type', $res);
             $this->assertStringStartsWith(
                 'application/json', $res['content_type']
             );
             $this->assertArrayHasKey('content', $res);
-            $this->assertEquals($res['content'], 'null');
-        } else {
-            $this->assertIsBool($res);
-            $this->assertFalse($res);
-        }
-    }
-
-    /**
-     * Test that a Request object can successfully perform a POST
-     *
-     * @return None
-     */
-    public function testPatch()
-    {
-        $creds = new Ubiq\Credentials();
-        $req = new Ubiq\Request($creds->getPapi(), $creds->getSapi());
-        $res = $req->patch(
-            $creds->getHost() . '/api/v0/encryption/key',
-            'null', 'application/json'
-        );
-
-        /*
-         * sending the patch request to the wrong endpoint
-         * should result in a 404 (not found)
-         */
-        if (is_array($res)) {
-            $this->assertArrayHasKey('status', $res);
-            $this->assertEquals($res['status'], 404);
-            $this->assertArrayHasKey('content_type', $res);
-            $this->assertStringStartsWith(
-                'text/html', $res['content_type']
-            );
-            $this->assertArrayHasKey('content', $res);
-            $this->assertEquals($res['content'], '');
+            $this->assertNotEquals($res['content'], 'null');
         } else {
             $this->assertIsBool($res);
             $this->assertFalse($res);

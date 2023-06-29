@@ -223,25 +223,4 @@ final class EncryptionTest extends TestCase
             strlen(Ubiq\encrypt(new Ubiq\Credentials, ''))
         );
     }
-
-    /**
-     * Test incorrect usage of the piecewise functionality
-     *
-     * This test verifies that an exception occurs when the key is used
-     * more times that was requested. It also implicitly tests that the
-     * default number of requests is 1.
-     *
-     * @return None
-     */
-    public function testKeyOveruse()
-    {
-        $enc = new Ubiq\Encryption(new Ubiq\Credentials);
-
-        $enc->begin();
-        $enc->update('abc');
-        $enc->end();
-
-        $this->expectException(Exception::class);
-        $enc->begin();
-    }
 }

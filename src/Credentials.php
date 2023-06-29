@@ -14,13 +14,25 @@ declare(strict_types=1);
 
 namespace Ubiq;
 
-// @codingStandardsIgnoreLine
-class _Credentials
+/**
+ * Object used to store a set of credentials while loading
+ * Not used outside of Credentials
+ *
+ * @category Cryptography
+ * @package  Ubiq-PHP
+ * @author   Ubiq Security <support@ubiqsecurity.com>
+ * @license  https://opensource.org/licenses/MIT MIT
+ * @link     https://gitlab.com/ubiqsecurity/ubiq-php
+ */
+class CredentialsConfig
 {
     public $papi = null;
     public $sapi = null;
     public $srsa = null;
     public $host = null;
+    public $config = null;
+    public $keymanager = null;
+    public $cachemanager = null;
 
     /**
      * Determine if enough of the credentials properties are present to
@@ -46,27 +58,43 @@ class _Credentials
  */
 class Credentials
 {
-    private /*_Credentials*/ $_creds = null;
+    private /*CredentialsConfig*/ $_creds = null;
 
-    // @codingStandardsIgnoreLine
+    /**
+     * Getter for Papi
+     *
+     * @return Papi
+     */
     public function getPapi() : string
     {
         return $this->_creds->papi;
     }
 
-    // @codingStandardsIgnoreLine
+    /**
+     * Getter for Sapi
+     *
+     * @return Sapi
+     */
     public function getSapi() : string
     {
         return $this->_creds->sapi;
     }
 
-    // @codingStandardsIgnoreLine
+    /**
+     * Getter for Srsa
+     *
+     * @return Srsa
+     */
     public function getSrsa() : string
     {
         return $this->_creds->srsa;
     }
 
-    // @codingStandardsIgnoreLine
+    /**
+     * Getter for host
+     *
+     * @return Host
+     */
     public function getHost() : string
     {
         return $this->_creds->host;
@@ -94,8 +122,7 @@ class Credentials
     public static function getDefaultFileName()
         : ?string
     {
-        $homedir = posix_getpwuid(posix_geteuid())['dir'];
-        return $homedir . DIRECTORY_SEPARATOR . '.ubiq/credentials';
+        return __DIR__ . DIRECTORY_SEPARATOR . '.ubiq/credentials';
     }
 
     /**
@@ -104,9 +131,9 @@ class Credentials
      * @return Credentials in an "anonymous" object
      */
     private static function _loadEnvironment()
-        : _Credentials
+        : CredentialsConfig
     {
-        $creds = new _Credentials();
+        $creds = new CredentialsConfig();
 
         $creds->papi = Credentials::_getenv('UBIQ_ACCESS_KEY_ID');
         $creds->sapi = Credentials::_getenv('UBIQ_SECRET_SIGNING_KEY');
@@ -125,9 +152,9 @@ class Credentials
      * @return Credentials in an "anonymous" object
      */
     private static function _loadFile(string $filename, string $profname)
-        : _Credentials
+        : CredentialsConfig
     {
-        $creds = new _Credentials();
+        $creds = new CredentialsConfig();
 
         $content = false;
         if (file_exists($filename)) {
@@ -157,15 +184,15 @@ class Credentials
     /**
      * Merge credential properties in $a and $b, using $a when both are present
      *
-     * @param _Credentials $a The first set of credentials
-     * @param _Credentials $b The second set of credentials
+     * @param CredentialsConfig $a The first set of credentials
+     * @param CredentialsConfig $b The second set of credentials
      *
-     * @return A merged set of _Credentials
+     * @return A merged set of CredentialsConfig
      */
-    private static function _merge(_Credentials $a, _Credentials $b)
-        : _Credentials
+    private static function _merge(CredentialsConfig $a, CredentialsConfig $b)
+        : CredentialsConfig
     {
-        $creds = new _Credentials();
+        $creds = new CredentialsConfig();
 
         $set = function (&$r, $a , $b) {
             $r = $a;
@@ -186,14 +213,15 @@ class Credentials
      * Merge a given set of credentials with the "default" credentials
      * from a given file
      *
-     * @param _Credentials $creds    A set of credentials to merge with
-     * @param string       $filename The path to the credentials file
+     * @param CredentialsConfig $creds    A set of credentials to merge with
+     * @param string            $filename The path to the credentials file
      *
      * @return The merged credentials
      */
     private static function _mergeWithDefault(
-        _Credentials $creds, string $filename
-    ) : _Credentials {
+        CredentialsConfig $creds,
+        string $filename
+    ) : CredentialsConfig {
         if (!$creds->viable()) {
             $creds = Credentials::_merge(
                 $creds, Credentials::_loadFile($filename, 'default')
@@ -229,7 +257,7 @@ class Credentials
         string $papi, string $sapi, string $srsa,
         ?string $host = null
     ) : bool {
-        $creds = new _Credentials();
+        $creds = new CredentialsConfig();
 
         $creds->papi = $papi;
         $creds->sapi = $sapi;
@@ -240,8 +268,7 @@ class Credentials
             if (!$creds->host) {
                 $creds->host = 'https://api.ubiqsecurity.com';
             } else if (substr($creds->host, 0, 7) !== 'http://'
-                       // @codingStandardsIgnoreLine
-                       && substr($creds->host, 0, 8) !== 'https://'
+                && substr($creds->host, 0, 8) !== 'https://'
             ) {
                 $creds->host = 'https://' . $creds->host;
             }
@@ -277,7 +304,9 @@ class Credentials
         $res = $creds->viable();
         if ($res) {
             $res = $this->set(
-                $creds->papi, $creds->sapi, $creds->srsa,
+                $creds->papi,
+                $creds->sapi,
+                $creds->srsa,
                 $creds->host
             );
         }
@@ -298,10 +327,36 @@ class Credentials
 
         if ($creds->viable()) {
             $this->set(
-                $creds->papi, $creds->sapi, $creds->srsa,
+                $creds->papi,
+                $creds->sapi,
+                $creds->srsa,
                 $creds->host
             );
         }
+
+        $config = file_get_contents(realpath(__DIR__ . '/../ubiq-config.json'));
+
+        if (empty($config)) {
+            $creds->config = [
+                'debug' => false,
+                'event_reporting' => [
+                    'minimum_event_count' => 5,
+                    'flush_interval' => 2,
+                    'destroy_report_async' => false
+                ],
+                'key_caching' => [
+                    'unstructured'  => false,
+                    'encrypt'       => false,
+                ]
+            ];
+        } else {
+            $this->config = json_decode($config, true);
+        }
+
+        $this->keymanager = new \Ubiq\KeyManager();
+        $this->cachemanager = \Ubiq\CacheManager::getInstance();
+        $this->eventprocessor = \Ubiq\EventProcessor::getInstance();
+        $this->eventprocessor->setCredentials($this);
     }
 
     /**
@@ -309,5 +364,9 @@ class Credentials
      */
     public function __destruct()
     {
+        // try to catch exiting
+        $this->eventprocessor->process(
+            $this->config['event_reporting']['destroy_report_async'] ?? false
+        );
     }
 }

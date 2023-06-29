@@ -52,26 +52,13 @@ final class CredentialsTest extends TestCase
     public function testDefaultCredentials()
     {
         $creds = new Ubiq\Credentials();
-        $creds->load('tests/resources/credentials');
+        $creds->load(__DIR__ . '/resources/credentials');
 
         $this->assertTrue($creds->complete());
-
-        $this->assertSame(
-            $creds->getPapi(), 'default_access_key_id'
-        );
-
-        $this->assertSame(
-            $creds->getSapi(), 'default_secret_signing_key'
-        );
-
-        $this->assertSame(
-            $creds->getSrsa(), 'default_secret_crypto_access_key'
-        );
-
-        // default server not specified by file, specified by code
-        $this->assertSame(
-            $creds->getHost(), 'https://api.ubiqsecurity.com'
-        );
+        $this->assertSame($creds->getPapi(), 'default_access_key_id');
+        $this->assertSame($creds->getSapi(), 'default_secret_signing_key');
+        $this->assertSame($creds->getSrsa(), 'default_secret_crypto_access_key');
+        $this->assertSame($creds->getHost(), 'https://api.ubiqsecurity.com');
     }
 
     /**
@@ -132,26 +119,13 @@ final class CredentialsTest extends TestCase
     public function testTestCredentials()
     {
         $creds = new Ubiq\Credentials();
-        $creds->load('tests/resources/credentials', 'test');
+        $creds->load(__DIR__ . '/resources/credentials', 'test');
 
         $this->assertTrue($creds->complete());
-
-        $this->assertSame(
-            $creds->getPapi(), 'test_access_key_id'
-        );
-
-        $this->assertSame(
-            $creds->getSapi(), 'test_secret_signing_key'
-        );
-
-        $this->assertSame(
-            $creds->getSrsa(), 'test_secret_crypto_access_key'
-        );
-
-        // default server not specified by file, specified by code
-        $this->assertSame(
-            $creds->getHost(), 'https://api.ubiqsecurity.com'
-        );
+        $this->assertSame($creds->getPapi(), 'test_access_key_id');
+        $this->assertSame($creds->getSapi(), 'test_secret_signing_key');
+        $this->assertSame($creds->getSrsa(), 'test_secret_crypto_access_key');
+        $this->assertSame($creds->getHost(), 'https://api.ubiqsecurity.com');
     }
 
     /**
