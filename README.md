@@ -13,6 +13,12 @@ and [below](#usage) for examples.
 
 Individual interfaces are documented in greater detail in the source code
 
+Tests covered by
+```
+    vendor/bin/phpcs --standard=phpcsruleset.xml src/ tests/
+    vendor/bin/phpunit --configuration phpunit.xml
+```
+
 ## Installation
 
 On Debian and Debian-like Linux systems:

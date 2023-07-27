@@ -366,7 +366,7 @@ class Credentials
     public function __destruct()
     {
         // try to catch exiting
-        $this->eventprocessor->process(
+        self::$eventprocessor->process(
             $this->config['event_reporting']['destroy_report_async'] ?? false
         );
     }
