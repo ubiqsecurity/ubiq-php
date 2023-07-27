@@ -72,7 +72,7 @@ class Decryption
             );
         }
 
-        $this->_creds->eventprocessor->addOrIncrement(
+        $this->_creds::$eventprocessor->addOrIncrement(
             new Event([
                 'api_key'                   => $this->_creds->getPapi(),
                 'dataset_name'              => $this->_dataset->name,
@@ -163,7 +163,7 @@ class Decryption
             }
         }
 
-        $key = $this->_creds->keymanager->getDecryptionKey(
+        $key = $this->_creds::$keymanager->getDecryptionKey(
             $this->_creds,
             $this->_dataset,
             $header
