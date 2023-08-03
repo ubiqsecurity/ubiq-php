@@ -62,7 +62,7 @@ class Encryption
         ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' uses');
 
         if ($creds) {
-            $key = $creds->keymanager->getEncryptionKey(
+            $key = $creds::$keymanager->getEncryptionKey(
                 $creds,
                 $dataset,
                 !$multiple_uses
@@ -94,7 +94,7 @@ class Encryption
             );
         }
 
-        $this->_creds->eventprocessor->addOrIncrement(
+        $this->_creds::$eventprocessor->addOrIncrement(
             new Event([
                 'api_key'                   => $this->_creds->getPapi(),
                 'dataset_name'              => $this->_dataset->name,

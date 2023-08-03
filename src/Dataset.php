@@ -40,14 +40,14 @@ class Dataset
         ?strign $dataset_group_name = null
     ) {
         if (empty($dataset_name)) {
-            $this->name = 'unnamed dataset';
+            $this->name = 'unknown';
             $this->type = DATASET_TYPE_UNSTRUCTURED;
         } else {
             $this->name = $dataset_name;
             $this->type = DATASET_TYPE_UNSTRUCTURED;
         }
 
-        $this->group_name = $dataset_group_name;
+        $this->group_name = $dataset_group_name ?? 'unknown';
 
     }
     

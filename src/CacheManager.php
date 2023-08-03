@@ -26,8 +26,6 @@ class CacheManager
     const CACHE_TYPE_KEYS = 'keys';
     const CACHE_TYPE_EVENTS = 'events';
 
-    private static $_instance = null;
-    
     public static $caches = [
         // indexed by datasetname - md5(base64_encode($encrypted_data_key))
         // [
@@ -165,35 +163,5 @@ class CacheManager
         string $dest_key
     ) {
         self::set($cache_type, $dest_key, self::get($cache_type, $source_key));
-    }
-
-    /**
-     * Prevent direct object creation
-     */
-    final private function __construct()
-    { 
-    }
-
-    /**
-     * Prevent object cloning
-     * 
-     * @return None
-     */
-    final private function __clone()
-    { 
-    }
-
-    /**
-     * Returns new or existing Singleton instance
-     *
-     * @return Singleton
-     */
-    final public static function getInstance()
-    {
-        if (null !== static::$_instance) {
-            return static::$_instance;
-        }
-        static::$_instance = new static();
-        return static::$_instance;
     }
 }
