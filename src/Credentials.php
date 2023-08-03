@@ -31,8 +31,6 @@ class CredentialsConfig
     public $srsa = null;
     public $host = null;
     public $config = null;
-    public $keymanager = null;
-    public $cachemanager = null;
 
     /**
      * Determine if enough of the credentials properties are present to
@@ -59,6 +57,10 @@ class CredentialsConfig
 class Credentials
 {
     private /*CredentialsConfig*/ $_creds = null;
+
+    public static $keymanager = null;
+    public static $cachemanager = null;
+    public static $eventprocessor = null;
 
     /**
      * Getter for Papi
@@ -353,10 +355,9 @@ class Credentials
             $this->config = json_decode($config, true);
         }
 
-        $this->keymanager = new \Ubiq\KeyManager();
-        $this->cachemanager = \Ubiq\CacheManager::getInstance();
-        $this->eventprocessor = \Ubiq\EventProcessor::getInstance();
-        $this->eventprocessor->setCredentials($this);
+        self::$keymanager = new \Ubiq\KeyManager();
+        self::$cachemanager = new \Ubiq\CacheManager();
+        self::$eventprocessor = new \Ubiq\EventProcessor($this);
     }
 
     /**
@@ -365,7 +366,7 @@ class Credentials
     public function __destruct()
     {
         // try to catch exiting
-        $this->eventprocessor->process(
+        self::$eventprocessor->process(
             $this->config['event_reporting']['destroy_report_async'] ?? false
         );
     }

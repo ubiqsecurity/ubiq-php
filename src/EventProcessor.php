@@ -73,10 +73,31 @@ class Event
     public function getKey()
     {
         $string = '';
-        foreach (self::SERIALIZE_MAP as $attribute => $key) {
-            $string .= $key . "='" . $this->{$attribute} . "' ";
+        foreach ($this->getMappedArray() as $key=>$val) {
+            $string .= $key . "='" . $val . "' ";
         }
         return trim($string);
+    }
+
+    /**
+     * Get a key with mapped values as an array
+     *
+     * @return The mapped array
+     */
+    public function getMappedArray($with_metadata = FALSE)
+    {
+        $return = [];
+        foreach (self::SERIALIZE_MAP as $attribute => $key) {
+            $return[$key] = $this->{$attribute};
+        }
+
+        if ($with_metadata) {
+            $return['first_call_timestamp'] = (new \DateTime())->setTimestamp($this->first_call_timestamp)->format('c');
+            $return['last_call_timestamp'] = (new \DateTime())->setTimestamp($this->last_call_timestamp)->format('c');
+            $return['count'] = $this->count;
+        }
+
+        return $return;
     }
 
     /**
@@ -102,7 +123,6 @@ class Event
  */
 class EventProcessor
 {
-    private static $_instance = null;
     private static $_creds = null;
     private static $_last_reported = null;
     private static $_processing = false;
@@ -111,14 +131,14 @@ class EventProcessor
     const EVENT_TYPE_DECRYPT = 'decrypt';
 
     /**
+     * Constructs this object
      * Sets credentials to this object
-     * Needed because it doesn't have them in an instantiator
      *
      * @param Credentials $creds Credentials object
      * 
      * @return None
      */
-    public function setCredentials(Credentials &$creds)
+    public function __construct(Credentials &$creds)
     {
         self::$_creds =& $creds;
     }
@@ -132,11 +152,10 @@ class EventProcessor
      */
     public function addOrIncrement(Event $event)
     {
-        $cache_manager = \Ubiq\CacheManager::getInstance();
         $event_idx = $event->getKey();
         $cache_event = null;
 
-        $cache_event = $cache_manager->getReference(
+        $cache_event = self::$_creds::$cachemanager->getReference(
             CacheManager::CACHE_TYPE_EVENTS,
             $event_idx
         );
@@ -148,7 +167,7 @@ class EventProcessor
         } else {
             ubiq_debug(self::$_creds, 'Initiating event with count 1 for ' . $event_idx);
 
-            $cache_manager->set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
+            self::$_creds::$cachemanager->set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
         }
 
         if (empty(self::$_last_reported)) {
@@ -183,16 +202,14 @@ class EventProcessor
         }
         ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
 
-        $cache_manager = \Ubiq\CacheManager::getInstance();
-
-        if ($cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
+        if (self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
         ) {
-            ubiq_debug(self::$_creds, 'Processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
 
             return true;
         }
 
-        ubiq_debug(self::$_creds, 'Not processing; count of ' . $cache_manager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
 
         return false;
     }
@@ -215,21 +232,19 @@ class EventProcessor
         
         ubiq_debug(self::$_creds, 'Processing events ' . ($async ? 'asyncronously' : 'syncronously'));
 
-        $cache_manager = \Ubiq\CacheManager::getInstance();
-
-        $cached_events = $cache_manager->getAll(CacheManager::CACHE_TYPE_EVENTS);
-        $cache_manager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
+        $cached_events = self::$_creds::$cachemanager->getAll(CacheManager::CACHE_TYPE_EVENTS);
+        self::$_creds::$cachemanager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
 
         // format for reporting
         $events = [];
         foreach ($cached_events as $cached_event) {
-            $event = (array)$cached_event;
-            $event['first_call_timestamp'] = (new \DateTime())->setTimestamp($event['first_call_timestamp'])->format('c');
-            $event['last_call_timestamp'] = (new \DateTime())->setTimestamp($event['last_call_timestamp'])->format('c');
+            $event = $cached_event->getMappedArray(true);
+
             $event['product'] = \Ubiq\LIBRARY;
             $event['product_version'] = \Ubiq\VERSION;
             $event['user-agent'] = \Ubiq\LIBRARY . '/' . \Ubiq\VERSION;
             $event['api_version'] = \Ubiq\API_VERSION;
+
             $events[] = $event;
         }
         $events = ['usage' => $events];
@@ -270,35 +285,5 @@ class EventProcessor
 
         self::$_last_reported = time();
         self::$_processing = false;
-    }
-
-    /**
-     * Prevent direct object creation
-     */
-    final private function __construct()
-    { 
-    }
-
-    /**
-     * Prevent object cloning
-     * 
-     * @return None
-     */
-    final private function __clone()
-    { 
-    }
-
-    /**
-     * Returns new or existing Singleton instance
-     *
-     * @return Singleton
-     */
-    final public static function getInstance()
-    {
-        if (null !== static::$_instance) {
-            return static::$_instance;
-        }
-        static::$_instance = new static();
-        return static::$_instance;
     }
 }

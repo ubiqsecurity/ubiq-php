@@ -35,7 +35,7 @@ class KeyManager
      */
     public function getKeyDefault(Credentials $creds, Dataset $dataset)
     {
-        $cache = $creds->cachemanager->get(
+        $cache = $creds::$cachemanager->get(
             CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-default'
         );
         
@@ -67,7 +67,7 @@ class KeyManager
 
         ubiq_debug($creds, 'Looking for cached key for ' . $dataset->name . ' for key ' . $key_idx);
 
-        $cache = $creds->cachemanager->get(
+        $cache = $creds::$cachemanager->get(
             CacheManager::CACHE_TYPE_KEYS,
             $dataset->name . '-keys-' . $key_idx
         );
@@ -151,14 +151,14 @@ class KeyManager
                 $cache_data['_key_raw'] = $key_raw;
             }
 
-            $creds->cachemanager->set(
+            $creds::$cachemanager->set(
                 CacheManager::CACHE_TYPE_KEYS,
                 $dataset->name . '-keys-' . $key_idx, $cache_data
             );
         }
 
         $cache_data['_key_raw'] = $key_raw;
-        // print_r($creds->cachemanager::$caches);
+        // print_r($creds::$cachemanager::$caches);
         return $cache_data;
     }
 
@@ -258,7 +258,7 @@ class KeyManager
 
             // if we're caching an encryption key, also cache it as the default
             if ($this->_shouldCache($creds, $dataset) && !$no_cache) {
-                $creds->cachemanager->copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
+                $creds::$cachemanager->copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
             }
         }
 
