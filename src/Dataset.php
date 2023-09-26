@@ -37,7 +37,7 @@ class Dataset
      */
     public function __construct(
         ?string $dataset_name,
-        ?strign $dataset_group_name = null
+        ?string $dataset_group_name = null
     ) {
         if (empty($dataset_name)) {
             $this->name = '';
