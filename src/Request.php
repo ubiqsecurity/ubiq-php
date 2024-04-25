@@ -240,21 +240,19 @@ class Request
         $i = curl_getinfo($this->_curl);
         $e = curl_error($this->_curl);
 
-        // print_r($i);
-        // print_r($e);
-        // echo $url;
+        $ret = array(
+            'status' => curl_getinfo(
+                $this->_curl, CURLINFO_RESPONSE_CODE
+            ),
+            'content_type' => curl_getinfo(
+                $this->_curl, CURLINFO_CONTENT_TYPE
+            ),
+            'info' => $i,
+            'error' => $e,
+            'content' => $response
+        );
 
-        if (!curl_error($this->_curl)) {
-            $ret = array(
-                'status' => curl_getinfo(
-                    $this->_curl, CURLINFO_RESPONSE_CODE
-                ),
-                'content_type' => curl_getinfo(
-                    $this->_curl, CURLINFO_CONTENT_TYPE
-                ),
-                'content' => $response
-            );
-        }
+        $ret['success'] = empty($e) && ($ret['status'] == 200 || $ret['status'] == 201);
 
         return $ret;
     }
