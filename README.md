@@ -61,6 +61,27 @@ The library has been tested with PHP 7.3.
 
 ## Usage
 
+
+### Configuration
+
+The library can use a `ubiq-config.json` file to configure behavior and settings.  This file can be located in any of the following paths and will load the first one that is found.  A sample config file ships with the library:
+
+* `docroot`
+* parent of `docroot`
+* root of `/src` where the library is installed
+* parent of `/src` where the library is installed
+
+Configuration can be set for the following attributes; if no config files are loaded, the default will be used.
+
+| Attribute | Description | Default |
+| :--- | :--- | :---: |
+| debug | Enables debugging mode, which will print verbose debugging information | false |
+| event_reporting.minimum_event_count | The number of events that must accumulate before event reporting sends an usage report | 5 |
+| event_reporting.flush_interval | The number of seconds (frequency) at which the event reporting queue will be checked to send | 2 |
+| event_reporting.destroy_report_async | Whether or not a final usage report will be sent when the library is destroyed (when PHP script exits) | false |
+| key_caching.unstructured | Enable or disable key caching for unstructured keys; this will NOT enable piecewise automatically, so is typically used in conjunction with \Ubiq\encrypt($multiple_uses = true), which re-uses an encryption key for unstructured encrypts | false |
+| key_caching.encrypt | Enable or disable encryption of keys in cache; when enabled, this will add overhead to the all encrypt/decrypt actions and will encrypt all keys in the memory cache | false |
+
 ### Credentials
 
 The library needs to be configured with your account credentials which are
