@@ -127,6 +127,16 @@ class KeyManager
         ubiq_debug($creds, 'Force disable cache ' . ($no_cache ? 'true' : 'false'));
         ubiq_debug($creds, 'Managing key for ' . $dataset->name . ' for key ' . $key_idx);
 
+        // if the key was bad, return an exception
+        if (empty($cache_data['_key_enc_prv'])) {
+            throw new \Exception('Invalid private key; cannot retrieve key from cache');
+        }
+        
+        // if the key was bad, return an exception
+        if (empty($cache_data['_key_raw'])) {
+            throw new \Exception('Invalid private key; cannot retrieve key from cache');
+        }
+        
         // decrypt anyway for the return
         // but if caching and not encrypting, don't add it to the cache store
         $pkey = openssl_pkey_get_private(
@@ -224,13 +234,7 @@ class KeyManager
                 'application/json'
             );
 
-            if (!$resp) {
-                throw new \Exception(
-                    'Request for encryption key failed'
-                );
-
-                return;
-            } else if ($resp['status'] != 201) {
+            if (!$resp['success']) {
                 throw new \Exception(
                     'Request for encryption key returned ' . $resp['status']
                 );
@@ -310,10 +314,6 @@ class KeyManager
 
             if (!$resp) {
                 throw new \Exception(
-                    'Request for decryption key failed'
-                );
-            } else if ($resp['status'] != 200) {
-                throw new \Exception(
                     'Request for decryption key returned ' . $resp['status']
                 );
             }
@@ -323,10 +323,10 @@ class KeyManager
             $cache = [
                 'key_idx'       => base64_encode(md5($key_headers['key_enc'])),
                 '_key_enc'      => $key_headers['key_enc'],
-                '_key_enc_prv'  => $json['encrypted_private_key'],
-                '_key_raw'      => base64_decode($json['wrapped_data_key']),
-                '_session'      => $json['encryption_session'],
-                '_fingerprint'  => $json['key_fingerprint'],
+                '_key_enc_prv'  => $json['encrypted_private_key'] ?? NULL,
+                '_key_raw'      => base64_decode($json['wrapped_data_key'] ?? NULL),
+                '_session'      => $json['encryption_session'] ?? NULL,
+                '_fingerprint'  => $json['key_fingerprint'] ?? NULL,
                 '_algorithm'    => new Algorithm($key_headers['algoid']),
             ];
 

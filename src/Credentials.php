@@ -336,7 +336,22 @@ class Credentials
             );
         }
 
-        $config = file_get_contents(realpath(__DIR__ . '/../ubiq-config.json'));
+        $config_paths = [
+            getcwd() . '/',
+            getcwd() . '/../',
+            __DIR__ . '/../',
+            __DIR__ . '/',
+        ];
+        
+        foreach ($config_paths as $path) {
+            if (file_exists(realpath($path . 'ubiq-config.json'))) {
+                $config = file_get_contents(realpath($path . 'ubiq-config.json'));
+
+                ubiq_debug($this, 'Loading ubiq-config.json at ' . $path);
+
+                break;
+            }
+        }
 
         if (empty($config)) {
             $creds->config = [
