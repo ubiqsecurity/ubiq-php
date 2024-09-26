@@ -55,18 +55,17 @@ class Encryption
         $dataset = null,
         $multiple_uses = false
     ) {
-        if (!Dataset::isDataset($dataset)) {
-            $dataset = new Dataset($dataset);
-        }
+        $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
 
-        ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' uses');
+        ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' use(s)');
 
         if ($creds) {
             $key = $creds::$keymanager->getEncryptionKey(
                 $creds,
                 $dataset,
-                !$multiple_uses
+                (!$multiple_uses) && ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED)
             );
+
         }
 
         $this->_key_enc = $key['_key_enc'] ?? null;
@@ -104,6 +103,11 @@ class Encryption
                 'key_number'                => 0,
             ])
         );
+        
+        // structured does not have incremental
+        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            return '';
+        }
 
         /*
          * there is an openssl_random_pseudo_bytes() function,
@@ -134,6 +138,26 @@ class Encryption
     }
 
     /**
+     * Routes update method based on type of dataset (structured or unstructured)
+     *
+     * @param string $plaintext The ciphertext to be decrypted
+     *
+     * @return A string containing a portion of the ciphertext. This
+     *         string should be appended to the string returned by the most
+     *         recent call to either begin() or update()
+     */
+    public function update(string $plaintext) : string
+    {
+        // structured does not have incremental
+        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            return $this->update_structured($plaintext);
+        }
+        elseif ($this->_dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            return $this->update_unstructured($plaintext);
+        }
+    }
+
+    /**
      * Add the given plaintext to the current encryption
      *
      * @param string $plaintext The plaintext to be encrypted
@@ -142,13 +166,19 @@ class Encryption
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
-    public function update(string $plaintext) : string
+    public function update_unstructured(string $plaintext) : string
     {
+        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            return $this->ff1_encrypt($plaintext);
+        }
+        
         if (is_null($this->_header)) {
             throw new \Exception(
                 'update() called without begin()'
             );
-        } else if (strlen($this->_header) == 0) {
+        }
+        
+        if (strlen($this->_header) == 0) {
             throw new \Exception(
                 'piecewise encryption not supported'
             );
@@ -176,6 +206,21 @@ class Encryption
     }
 
     /**
+     * Encrypt the given ciphertext for structured
+     * Implementation of FF-1 algorithm per
+     * https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-38Gr1-draft.pdf
+     *
+     * @param string $plaintext The plaintext to be decrypted
+     *
+     * @return A string containing the ciphertext
+     */
+    public function update_structured($plaintext)
+    {
+        // run ff1 decrypt
+        return $plaintext;
+    }
+
+    /**
      * End the current encryption process
      *
      * @return A string containing any remaining ciphertext or authentication
@@ -184,6 +229,12 @@ class Encryption
      */
     public function end() : string
     {
+
+        // structured does not have incremental
+        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            return '';
+        }
+        
         if (is_null($this->_header)) {
             throw new \Exception(
                 'end() called without begin()'
@@ -200,6 +251,7 @@ class Encryption
 
         return $ret;
     }
+
 
     /**
      * Destroy the encryption object

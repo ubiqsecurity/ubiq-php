@@ -59,6 +59,7 @@ class Credentials
     private /*CredentialsConfig*/ $_creds = null;
 
     public static $keymanager = null;
+    public static $datasetmanager = null;
     public static $cachemanager = null;
     public static $eventprocessor = null;
 
@@ -363,14 +364,17 @@ class Credentials
                 ],
                 'key_caching' => [
                     'unstructured'  => false,
+                    'structured'  => false,
                     'encrypt'       => false,
-                ]
+                ],
+                'dataset_caching' => true
             ];
         } else {
             $this->config = json_decode($config, true);
         }
 
         self::$keymanager = new \Ubiq\KeyManager();
+        self::$datasetmanager = new \Ubiq\DatasetManager();
         self::$cachemanager = new \Ubiq\CacheManager();
         self::$eventprocessor = new \Ubiq\EventProcessor($this);
     }

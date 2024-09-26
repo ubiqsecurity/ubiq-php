@@ -35,14 +35,21 @@ class KeyManager
      */
     public function getKeyDefault(Credentials $creds, Dataset $dataset)
     {
-        $cache = $creds::$cachemanager->get(
+        $cache = $creds::$cachemanager::get(
             CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-default'
         );
+
+        print_r(array_keys($creds::$cachemanager::$caches['keys']));
         
         if (!empty($cache)) {
             ubiq_debug($creds, 'Found default key of ' . $cache['key_idx'] . ' for ' . $dataset->name);
 
-            return $this->getKey($creds, $dataset, $cache['_key_enc']);
+            if ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+                return $this->getKey($creds, $dataset, $cache['_key_enc']);
+            }
+            elseif ($dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+                return $this->getKey($creds, $dataset, $cache['_key_enc']);
+            }
         }
 
         return false;        
@@ -67,7 +74,7 @@ class KeyManager
 
         ubiq_debug($creds, 'Looking for cached key for ' . $dataset->name . ' for key ' . $key_idx);
 
-        $cache = $creds::$cachemanager->get(
+        $cache = $creds::$cachemanager::get(
             CacheManager::CACHE_TYPE_KEYS,
             $dataset->name . '-keys-' . $key_idx
         );
@@ -124,7 +131,7 @@ class KeyManager
     ) {
         $key_idx = $cache_data['key_idx'];
 
-        ubiq_debug($creds, 'Force disable cache ' . ($no_cache ? 'true' : 'false'));
+        ubiq_debug($creds, 'Force disable key cache ' . ($no_cache ? 'true' : 'false'));
         ubiq_debug($creds, 'Managing key for ' . $dataset->name . ' for key ' . $key_idx);
 
         // if the key was bad, return an exception
@@ -161,14 +168,14 @@ class KeyManager
                 $cache_data['_key_raw'] = $key_raw;
             }
 
-            $creds::$cachemanager->set(
+            $creds::$cachemanager::set(
                 CacheManager::CACHE_TYPE_KEYS,
                 $dataset->name . '-keys-' . $key_idx, $cache_data
             );
         }
 
         $cache_data['_key_raw'] = $key_raw;
-        // print_r($creds::$cachemanager::$caches);
+
         return $cache_data;
     }
 
@@ -182,12 +189,16 @@ class KeyManager
      */
     private function _shouldCache(Credentials $creds, Dataset $dataset)
     {
-        $type = $dataset->type ?? DATASET_TYPE_UNSTRUCTURED;
-
-        if ($type == DATASET_TYPE_UNSTRUCTURED) {
-            ubiq_debug($creds, 'Key caching configuration for ' . DATASET_TYPE_UNSTRUCTURED . ' is ' . $creds->config['key_caching']['unstructured']);
+        if ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_UNSTRUCTURED . ' is ' . $creds->config['key_caching']['unstructured']);
 
             return ($creds->config['key_caching']['unstructured']);
+        }
+
+        if ($dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_STRUCTURED . ' is ' . $creds->config['key_caching']['structured']);
+
+            return ($creds->config['key_caching']['structured']);
         }
 
         return true;
@@ -200,7 +211,7 @@ class KeyManager
      *
      * @param Credentials $creds    Credentials object to operate on
      * @param Dataset     $dataset  Dataset to get a key for
-     * @param bool        $no_cache Force no-cache
+     * @param bool        $no_cache Force no-cache, used in "multiple_uses" context
      * 
      * @return Array of key data
      */
@@ -228,32 +239,61 @@ class KeyManager
                 $creds->getPapi(), $creds->getSapi()
             );
 
-            $resp = $http->post(
-                $creds->getHost() . '/api/v0/encryption/key',
-                json_encode(['uses' => 1]),
-                'application/json'
-            );
-
-            if (!$resp['success']) {
-                throw new \Exception(
-                    'Request for encryption key returned ' . $resp['status']
+            if ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+                $resp = $http->post(
+                    $creds->getHost() . '/api/v0/encryption/key',
+                    json_encode(['uses' => 1]),
+                    'application/json'
                 );
 
-                return;
+                if (!$resp['success']) {
+                    throw new \Exception(
+                        'Request for ' . $dataset->type . ' encryption key returned ' . $resp['status']
+                    );
+    
+                    return;
+                }
+                
+                $json = json_decode($resp['content'], true);
+    
+                $cache = [
+                    'key_idx'       => md5($json['encrypted_data_key']),
+                    '_key_enc'      => base64_decode($json['encrypted_data_key']),
+                    '_key_enc_prv'  => $json['encrypted_private_key'],
+                    '_key_raw'      => base64_decode($json['wrapped_data_key']),
+                    '_session'      => $json['encryption_session'],
+                    '_fingerprint'  => $json['key_fingerprint'],
+                    '_algorithm'    => new Algorithm(strtolower($json['security_model']['algorithm'])),
+                    '_fragment'     => $json['security_model']['enable_data_fragmentation']
+                ];
             }
-            
-            $json = json_decode($resp['content'], true);
+            elseif ($dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+                $resp = $http->get(
+                    $creds->getHost() . '/api/v0/fpe/key?papi=' . urlencode($creds->getPapi()) . '&ffs_name=' . urlencode($dataset->name),
+                    'application/json'
+                );
 
-            $cache = [
-                'key_idx'       => md5($json['encrypted_data_key']),
-                '_key_enc'      => base64_decode($json['encrypted_data_key']),
-                '_key_enc_prv'  => $json['encrypted_private_key'],
-                '_key_raw'      => base64_decode($json['wrapped_data_key']),
-                '_session'      => $json['encryption_session'],
-                '_fingerprint'  => $json['key_fingerprint'],
-                '_algorithm'    => new Algorithm(strtolower($json['security_model']['algorithm'])),
-                '_fragment'     => $json['security_model']['enable_data_fragmentation']
-            ];
+                if (!$resp['success']) {
+                    throw new \Exception(
+                        'Request for ' . $dataset->type . ' encryption key returned ' . $resp['status']
+                    );
+    
+                    return;
+                }
+                
+                $json = json_decode($resp['content'], true);
+
+                $cache = [
+                    'key_idx'       => md5(base64_encode($json['key_number'])),
+                    '_key_enc'      => $json['key_number'],
+                    '_key_enc_prv'  => $json['encrypted_private_key'],
+                    '_key_raw'      => base64_decode($json['wrapped_data_key']),
+                    '_session'      => NULL,
+                    '_fingerprint'  => NULL,
+                    '_algorithm'    => new Algorithm('ff1'),
+                    '_fragment'     => NULL,
+                ];
+            }
 
             ubiq_debug($creds, 'Got encryption key from backend for ' . $dataset->name);
             
@@ -262,7 +302,9 @@ class KeyManager
 
             // if we're caching an encryption key, also cache it as the default
             if ($this->_shouldCache($creds, $dataset) && !$no_cache) {
-                $creds::$cachemanager->copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
+                ubiq_debug($creds, 'Caching as default encryption key for ' . $dataset->name . ' ' . $cache['key_idx']);
+
+                $creds::$cachemanager::copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
             }
         }
 
@@ -295,9 +337,14 @@ class KeyManager
             
             return;
         }
-        $cache = $this->getKey($creds, $dataset, $key_headers['key_enc']);
+        
+        if ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            $cache = $this->getKey($creds, $dataset, $key_headers['key_enc']);
 
-        if (empty($cache)) {
+            if (!empty($cache)) {
+                return $cache;
+            }
+
             ubiq_debug($creds, 'Getting decryption key from backend for ' . $dataset->name);
 
             $http = new Request(
@@ -314,14 +361,14 @@ class KeyManager
 
             if (!$resp) {
                 throw new \Exception(
-                    'Request for decryption key returned ' . $resp['status']
+                    'Request for  ' . $dataset->type . ' decryption key returned ' . $resp['status']
                 );
             }
 
             $json = json_decode($resp['content'], true);
 
             $cache = [
-                'key_idx'       => base64_encode(md5($key_headers['key_enc'])),
+                'key_idx'       => md5($key_headers['key_enc']),
                 '_key_enc'      => $key_headers['key_enc'],
                 '_key_enc_prv'  => $json['encrypted_private_key'] ?? NULL,
                 '_key_raw'      => base64_decode($json['wrapped_data_key'] ?? NULL),
@@ -329,12 +376,49 @@ class KeyManager
                 '_fingerprint'  => $json['key_fingerprint'] ?? NULL,
                 '_algorithm'    => new Algorithm($key_headers['algoid']),
             ];
-
-            ubiq_debug($creds, 'Got decryption key from backend for ' . $dataset->name);
-
-            // the return does decryption of key as needed
-            $cache = $this->cacheKey($creds, $dataset, $cache);
         }
+        elseif ($dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            $cache = $this->getKey($creds, $dataset, $key_headers['key_number']);
+
+            if (!empty($cache)) {
+                return $cache;
+            }
+
+            ubiq_debug($creds, 'Getting decryption key from backend for ' . $dataset->name);
+
+            $http = new Request(
+                $creds->getPapi(), $creds->getSapi()
+            );
+
+            $resp = $http->get(
+                $creds->getHost() . '/api/v0/fpe/key?papi=' . urlencode($creds->getPapi()) . '&ffs_name=' . urlencode($dataset->name) . '&key_number=' . $key_headers['key_number'],
+                'application/json'
+            );
+
+            if (!$resp) {
+                throw new \Exception(
+                    'Request for  ' . $dataset->type . ' decryption key returned ' . $resp['status']
+                );
+            }
+
+            $json = json_decode($resp['content'], true);
+
+            $cache = [
+                'key_idx'       => md5($json['key_number']),
+                '_key_enc'      => NULL,
+                '_key_enc_prv'  => $json['encrypted_private_key'],
+                '_key_raw'      => base64_decode($json['wrapped_data_key']),
+                '_session'      => NULL,
+                '_fingerprint'  => NULL,
+                '_algorithm'    => new Algorithm('ff1'),
+                '_fragment'     => NULL,
+            ];
+        }
+
+        ubiq_debug($creds, 'Got decryption key from backend for ' . $dataset->name);
+
+        // the return does decryption of key as needed
+        $cache = $this->cacheKey($creds, $dataset, $cache);
 
         ubiq_debug($creds, 'Finished getDecryptionKey for ' . $dataset->name);
 
