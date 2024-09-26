@@ -25,6 +25,7 @@ class CacheManager
 {
     const CACHE_TYPE_KEYS = 'keys';
     const CACHE_TYPE_EVENTS = 'events';
+    const CACHE_TYPE_DATASET_CONFIGS = 'dataset_configs';
 
     public static $caches = [
         // indexed by datasetname - md5(base64_encode($encrypted_data_key))
@@ -39,7 +40,10 @@ class CacheManager
         // ]
         self::CACHE_TYPE_KEYS      => [],
 
-        self::CACHE_TYPE_EVENTS    => []
+        self::CACHE_TYPE_EVENTS    => [],
+
+        self::CACHE_TYPE_DATASET_CONFIGS    => []
+
     ];
 
     /**
@@ -50,7 +54,7 @@ class CacheManager
      * 
      * @return Var of the cache or FALSE if not found
      */
-    public function get(string $cache_type, string $key)
+    public static function get(string $cache_type, string $key)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return false;
@@ -66,7 +70,7 @@ class CacheManager
      * 
      * @return The number of elements in the cache
      */
-    public function getCount(string $cache_type)
+    public static function getCount(string $cache_type)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return -1;
@@ -82,7 +86,7 @@ class CacheManager
      * 
      * @return The array of all cache elements
      */
-    public function getAll(string $cache_type)
+    public static function getAll(string $cache_type)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return [];
@@ -98,7 +102,7 @@ class CacheManager
      * 
      * @return None
      */
-    public function clearAll(string $cache_type)
+    public static function clearAll(string $cache_type)
     {
         self::$caches[$cache_type] = [];
     }
@@ -111,7 +115,7 @@ class CacheManager
      * 
      * @return Reference to cache result
      */
-    public function getReference(string $cache_type, string $key)
+    public static function getReference(string $cache_type, string $key)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             $return = false;
@@ -139,7 +143,7 @@ class CacheManager
      * 
      * @return Null if not found
      */
-    public function set(string $cache_type, string $key, $val)
+    public static function set(string $cache_type, string $key, $val)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return null;

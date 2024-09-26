@@ -45,9 +45,7 @@ class Decryption
         Credentials $creds = null,
         $dataset = null
     ) {
-        if (!Dataset::isDataset($dataset)) {
-            $dataset = new Dataset($dataset);
-        }
+        $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
 
         $this->_creds = $creds;
         $this->_dataset = $dataset;
@@ -134,15 +132,35 @@ class Decryption
     }
 
     /**
-     * Add the given ciphertext to the current decryption
+     * Routes update method based on type of dataset (structured or unstructured)
      *
      * @param string $ciphertext The ciphertext to be decrypted
      *
-     * @return A string containing a portion of the ciphertext. This
+     * @return A string containing a portion of the plaintext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
     public function update(string $ciphertext) : string
+    {
+        // structured does not have incremental
+        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
+            return $this->update_structured($ciphertext);
+        }
+        elseif ($this->_dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            return $this->update_unstructured($ciphertext);
+        }
+    }
+
+    /**
+     * Add the given ciphertext to the current decryption for unstructured
+     *
+     * @param string $ciphertext The ciphertext to be decrypted
+     *
+     * @return A string containing a portion of the plaintext. This
+     *         string should be appended to the string returned by the most
+     *         recent call to either begin() or update()
+     */
+    public function update_unstructured(string $ciphertext) : string
     {
         if (is_null($this->_iv)) {
             throw new \Exception(
@@ -200,6 +218,29 @@ class Decryption
         }
 
         return $pt;
+    }
+
+    /**
+     * Decrypt the given ciphertext for structured
+     *
+     * @param string $ciphertext The ciphertext to be decrypted
+     *
+     * @return A string containing the plaintext
+     */
+    public function update_structured(string $ciphertext) : string
+    {
+        $headers = [
+            'key_number' => 1
+        ]; // parse(keynum)
+
+        $key = $this->_creds::$keymanager->getDecryptionKey(
+            $this->_creds,
+            $this->_dataset,
+            $headers
+        );
+
+        return $ciphertext;
+        // run ff1 decrypt
     }
 
     /**

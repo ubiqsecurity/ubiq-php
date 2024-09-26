@@ -15,24 +15,25 @@ declare(strict_types=1);
 namespace Ubiq;
 error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE | E_STRICT);
 
-foreach (array('Algorithm.php',
-               'CacheManager.php',
-               'Credentials.php',
-               'Dataset.php',
-               'Decryption.php',
-               'Encryption.php',
-               'EventProcessor.php',
-               'KeyManager.php',
-               'Request.php') as $file) {
+foreach (array(
+                'Algorithm.php',
+                'CacheManager.php',
+                'Credentials.php',
+                'Dataset.php',
+                'DatasetManager.php',
+                'Decryption.php',
+                'Encryption.php',
+                'EventProcessor.php',
+                'KeyManager.php',
+                'Request.php'
+            ) as $file) {
     include implode(DIRECTORY_SEPARATOR, array(__DIR__, $file));
 }
 
-const VERSION = '0.2.2';
+const VERSION = '2.0.0';
 const LIBRARY = 'ubiq-php';
 const API_VERSION = 'V3';
 const HEADER_V0_FLAG_AAD = 1;
-const DATASET_TYPE_STRUCTURED = 'structured';
-const DATASET_TYPE_UNSTRUCTURED = 'unstructured';
 
 
 /**
@@ -51,6 +52,7 @@ function encrypt(
     $dataset = null,
     $multiple_uses = false
 ) {
+
     $enc = new Encryption($credentials, $dataset, $multiple_uses);
 
     $ct  = $enc->begin();

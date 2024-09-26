@@ -155,7 +155,7 @@ class EventProcessor
         $event_idx = $event->getKey();
         $cache_event = null;
 
-        $cache_event = self::$_creds::$cachemanager->getReference(
+        $cache_event = self::$_creds::$cachemanager::getReference(
             CacheManager::CACHE_TYPE_EVENTS,
             $event_idx
         );
@@ -167,7 +167,7 @@ class EventProcessor
         } else {
             ubiq_debug(self::$_creds, 'Initiating event with count 1 for ' . $event_idx);
 
-            self::$_creds::$cachemanager->set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
+            self::$_creds::$cachemanager::set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
         }
 
         if (empty(self::$_last_reported)) {
@@ -202,14 +202,14 @@ class EventProcessor
         }
         ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
 
-        if (self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
+        if (self::$_creds::$cachemanager::getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
         ) {
-            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_creds::$cachemanager::getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
 
             return true;
         }
 
-        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_creds::$cachemanager::getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
 
         return false;
     }
@@ -232,8 +232,8 @@ class EventProcessor
         
         ubiq_debug(self::$_creds, 'Processing events ' . ($async ? 'asyncronously' : 'syncronously'));
 
-        $cached_events = self::$_creds::$cachemanager->getAll(CacheManager::CACHE_TYPE_EVENTS);
-        self::$_creds::$cachemanager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
+        $cached_events = self::$_creds::$cachemanager::getAll(CacheManager::CACHE_TYPE_EVENTS);
+        self::$_creds::$cachemanager::clearAll(CacheManager::CACHE_TYPE_EVENTS);
 
         // format for reporting
         $events = [];

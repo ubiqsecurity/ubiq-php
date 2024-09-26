@@ -26,6 +26,7 @@ class Dataset
     public $name;
     public $group_name;
     public $type;
+    public $structured_config;
 
     /**
      * Create a dataset
@@ -37,18 +38,14 @@ class Dataset
      */
     public function __construct(
         ?string $dataset_name,
-        ?string $dataset_group_name = null
+        ?string $dataset_group_name = null,
+        ?string $dataset_type = null,
+        ?array $structured_config = []
     ) {
-        if (empty($dataset_name)) {
-            $this->name = '';
-            $this->type = DATASET_TYPE_UNSTRUCTURED;
-        } else {
-            $this->name = $dataset_name;
-            $this->type = DATASET_TYPE_UNSTRUCTURED;
-        }
-
+        $this->name = $dataset_name ?? '';
         $this->group_name = $dataset_group_name ?? '';
-
+        $this->type = $dataset_type;
+        $this->structured_config = $structured_config;
     }
     
     /**
