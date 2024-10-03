@@ -356,9 +356,11 @@ class Credentials
 
         if (empty($config)) {
             $creds->config = [
-                'debug' => false,
+                'loging' => [
+                    'verbose' => false,
+                ],
                 'event_reporting' => [
-                    'minimum_event_count' => 5,
+                    'minimum_count' => 5,
                     'flush_interval' => 2,
                     'destroy_report_async' => false
                 ],

@@ -95,7 +95,7 @@ function ubiq_debug(?Credentials $creds, string $msg)
 {
     if (!empty($creds)
         && !empty($creds->config)
-        && ($creds->config['debug'] ?? false)
+        && ($creds->config['logging']['verbose'] ?? false)
     ) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
