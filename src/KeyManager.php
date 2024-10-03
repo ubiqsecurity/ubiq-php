@@ -283,6 +283,11 @@ class KeyManager
                 
                 $json = json_decode($resp['content'], true);
 
+                // the idx is md5-d and encoded for consistency with the unstructured keys and not making changes
+                // in how the keycache looks up and stores them; it makes the index of the key cache a bit more
+                // obfuscated than just a key number when debugging, but is simpler code
+                // same goes for why we put key_number in _key_enc
+
                 $cache = [
                     'key_idx'       => md5(base64_encode($json['key_number'])),
                     '_key_enc'      => $json['key_number'],
