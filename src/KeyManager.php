@@ -23,6 +23,16 @@ namespace Ubiq;
  */
 class KeyManager
 {
+    /**
+     * Gets the configured TTL (or default) from configuration
+     *
+     * @param Credentials $creds   Credentials object to operate on
+     * 
+     * @return int TTL seconds
+     */
+    private static function getCacheTTL(Credentials $creds) {
+        return $creds->config['key_caching']['ttl_seconds'] ?? 1800;
+    }
 
     /**
      * Gets the default key for a dataset
@@ -85,7 +95,7 @@ class KeyManager
             $return = $cache;
 
             // if caching and encrypting, decrypt the key
-            if ($creds->config['key_caching']['encrypt']) {
+            if ($creds->config['key_caching']['encrypted']) {
                 ubiq_debug($creds, 'Cached keys are encrypted; decrypting prior to returning');
                 
                 $pkey = openssl_pkey_get_private(
@@ -161,8 +171,9 @@ class KeyManager
 
         if ($this->_shouldCache($creds, $dataset) && !$no_cache) {
             ubiq_debug($creds, 'Caching key for ' . $dataset->name . ' for key ' . $key_idx);
+            ubiq_debug($creds, 'Setting TTL for ' . $dataset->name . ' for key ' . $key_idx . ' to ' . self::getCacheTTL($creds) . ' seconds');
 
-            if (!$creds->config['key_caching']['encrypt']) {
+            if (!$creds->config['key_caching']['encrypted']) {
                 ubiq_debug($creds, 'Cached keys are NOT encrypted; decrypting prior to cache');
             
                 $cache_data['_key_raw'] = $key_raw;
@@ -170,7 +181,14 @@ class KeyManager
 
             $creds::$cachemanager::set(
                 CacheManager::CACHE_TYPE_KEYS,
-                $dataset->name . '-keys-' . $key_idx, $cache_data
+                $dataset->name . '-keys-' . $key_idx,
+                $cache_data
+            );
+
+            $creds::$cachemanager::setTTL(
+                CacheManager::CACHE_TYPE_KEYS,
+                $dataset->name . '-keys-' . $key_idx,
+                strtotime('+' . self::getCacheTTL($creds) . ' seconds')
             );
         }
 
@@ -308,8 +326,19 @@ class KeyManager
             // if we're caching an encryption key, also cache it as the default
             if ($this->_shouldCache($creds, $dataset) && !$no_cache) {
                 ubiq_debug($creds, 'Caching as default encryption key for ' . $dataset->name . ' ' . $cache['key_idx']);
+                ubiq_debug($creds, 'Setting TTL for default encryption key for ' . $dataset->name . ' ' . $cache['key_idx'] . ' to ' . self::getCacheTTL($creds) . ' seconds');
 
-                $creds::$cachemanager::copy(CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-' . $cache['key_idx'], $dataset->name . '-keys-default');
+                $creds::$cachemanager::copy(
+                    CacheManager::CACHE_TYPE_KEYS,
+                    $dataset->name . '-keys-' . $cache['key_idx'],
+                    $dataset->name . '-keys-default'
+                );
+                
+                $creds::$cachemanager::setTTL(
+                    CacheManager::CACHE_TYPE_KEYS,
+                    $dataset->name . '-keys-default',
+                    strtotime('+' . self::getCacheTTL($creds) . ' seconds')
+                );
             }
         }
 

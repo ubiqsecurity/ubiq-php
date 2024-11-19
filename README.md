@@ -242,8 +242,6 @@ echo 'DECRYPTED plaintext= ' + $plaintext + '\n';
 Additional information on how to use these models in your own applications is available by contacting Ubiq.
 
 ### Custom Metadata for Usage Reporting
-TODO
-
 There are cases where a developer would like to attach metadata to usage information reported by the application.  Both the structured and unstructured interfaces allow user_defined metadata to be sent with the usage information reported by the libraries.
 
 The **add_reporting_user_defined_metadata** function accepts a string in JSON format that will be stored in the database with the usage records.  The string must be less than 1024 characters and be a valid JSON format.  The string must include both the `{` and `}` symbols.  The supplied value will be used until the object goes out of scope.  Due to asynchronous processing, changing the value may be immediately reflected in subsequent usage.
@@ -301,8 +299,8 @@ The <b>event_reporting</b> section contains values to control how often the usag
 - <b>destroy_report_async</b> Whether or not a final usage report will be sent when the library is destroyed (when PHP script exits) (default: true)
 - <b>minimum_count</b> indicates the minimum number of usage records that must be queued up before sending the usage
 - <b>flush_interval</b> indicates the sleep interval before all usage will be flushed to server.
-- TODO <b>trap_exceptions</b> indicates whether exceptions encountered while reporting usage will be trapped and ignored or if it will become an error that gets reported to the application
-- TODO <b>timestamp_granularity</b> indicates the how granular the timestamp will be when reporting events.  Valid values are
+- <b>trap_exceptions</b> indicates whether exceptions encountered while reporting usage will be trapped and ignored or if it will become an error that gets reported to the application
+- <b>timestamp_granularity</b> indicates the how granular the timestamp will be when reporting events.  Valid values are
   - "MICROS"  
     // DEFAULT: values are reported down to the microsecond resolution when possible
   - "MILLIS"  
@@ -324,7 +322,6 @@ The <b>key_caching</b> section contains values to control how and when keys are 
 - <b>unstructured</b> indicates whether keys will be cached when doing unstructured decryption. (default: true)
 - <b>unstructured</b> indicates whether keys will be cached when doing structured decryption. (default: true)
 - <b>encrypt</b> indicates if keys should be stored encrypted. If keys are encrypted, they will be harder to access via memory, but require them to be decrypted with each use. (default: false)
-- <b>ttl_seconds</b> how many seconds before cache entries should expire and be re-retrieved (default: true) TODO
 
 #### Logging
 The <b>logging</b> section contains values to control logging levels.
@@ -334,27 +331,27 @@ The <b>logging</b> section contains values to control logging levels.
 
 ```json
 {
-  "event_reporting": {
-    "minimum_count": 2,
-    "flush_interval": 2,
-    "trap_exceptions": false, TRUE
-    "timestamp_granularity" : "MICROS"
-  },
-  "key_caching":{
-    "unstructured": true,
-    "structured": true,
-    "encrypt": false,
-    "ttl_seconds": 1800 TODO
-  },
-  "logging": {
-    "verbose": true
-  }
+    "logging": {
+        "verbose": true
+    },
+    "event_reporting": {
+        "minimum_count": 5,
+        "flush_interval": 2,
+        "trap_exceptions": false,
+        "timestamp_granularity": "SECONDS",
+        "destroy_report_async": false
+    },
+    "key_caching" : {
+        "unstructured": true,
+        "structured": true,
+        "encrypt": false,
+        "ttl_seconds" : 1800
+    },
+    "dataset_caching" : true
 }
 ```
 
 ## Ubiq API Error Reference
-TODO
-
 Occasionally, you may encounter issues when interacting with the Ubiq API. 
 
 | Status Code | Meaning | Solution |
