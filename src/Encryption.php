@@ -168,10 +168,6 @@ class Encryption
      */
     public function update_unstructured(string $plaintext) : string
     {
-        if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
-            return $this->ff1_encrypt($plaintext);
-        }
-        
         if (is_null($this->_header)) {
             throw new \Exception(
                 'update() called without begin()'
@@ -216,7 +212,7 @@ class Encryption
      */
     public function update_structured($plaintext)
     {
-        // run ff1 decrypt
+        // run ff1 encrypt
         return $plaintext;
     }
 

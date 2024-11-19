@@ -39,7 +39,7 @@ class KeyManager
             CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-default'
         );
 
-        print_r(array_keys($creds::$cachemanager::$caches['keys']));
+        // print_r(array_keys($creds::$cachemanager::$caches['keys']));
         
         if (!empty($cache)) {
             ubiq_debug($creds, 'Found default key of ' . $cache['key_idx'] . ' for ' . $dataset->name);
