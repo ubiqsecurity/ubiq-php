@@ -56,17 +56,18 @@ class CredentialsConfig
  */
 class Credentials
 {
-    private /*CredentialsConfig*/ $_creds = null;
+    private static ?CredentialsConfig $_creds = null;
 
-    public static $keymanager = null;
-    public static $datasetmanager = null;
-    public static $cachemanager = null;
-    public static $eventprocessor = null;
+    public static ?KeyManager $keymanager = null;
+    public static ?DatasetManager $datasetmanager = null;
+    public static ?CacheManager $cachemanager = null;
+    public static ?EventProcessor $eventprocessor = null;
+    public static $config = null;
 
     /**
      * Getter for Papi
      *
-     * @return Papi
+     * @return string Papi
      */
     public function getPapi() : string
     {
@@ -76,7 +77,7 @@ class Credentials
     /**
      * Getter for Sapi
      *
-     * @return Sapi
+     * @return string Sapi
      */
     public function getSapi() : string
     {
@@ -86,7 +87,7 @@ class Credentials
     /**
      * Getter for Srsa
      *
-     * @return Srsa
+     * @return string Srsa
      */
     public function getSrsa() : string
     {
@@ -96,7 +97,7 @@ class Credentials
     /**
      * Getter for host
      *
-     * @return Host
+     * @return string Host
      */
     public function getHost() : string
     {
@@ -108,7 +109,7 @@ class Credentials
      *
      * @param string $name The name of the environment variable
      *
-     * @return Value of the variable or null
+     * @return string Value of the variable or null
      */
     private static function _getenv(string $name)
         : ?string
@@ -118,9 +119,21 @@ class Credentials
     }
 
     /**
+     * Adds metadata to reported events that can be used for attribution/tagging when events are retrieved
+     *
+     * @param string $user_data A valid JSON string less than 1024 characters
+     * 
+     * @return None
+     */
+    public static function addReportingUserDefinedMetadata(string $user_data)
+    {
+        self::$eventprocessor::addUserDefinedMetadata($user_data);
+    }
+
+    /**
      * Get the default path of the credentials file
      *
-     * @return A string containing the path to the credentials file
+     * @return string A string containing the path to the credentials file
      */
     public static function getDefaultFileName()
         : ?string
@@ -131,7 +144,7 @@ class Credentials
     /**
      * Populate properties from the environment
      *
-     * @return Credentials in an "anonymous" object
+     * @return CredentialsConfig in an "anonymous" object
      */
     private static function _loadEnvironment()
         : CredentialsConfig
@@ -152,7 +165,7 @@ class Credentials
      * @param string $filename The path to the credentials file
      * @param string $profname The name of the profile in the credentials
      *
-     * @return Credentials in an "anonymous" object
+     * @return CredentialsConfig in an "anonymous" object
      */
     private static function _loadFile(string $filename, string $profname)
         : CredentialsConfig
@@ -190,7 +203,7 @@ class Credentials
      * @param CredentialsConfig $a The first set of credentials
      * @param CredentialsConfig $b The second set of credentials
      *
-     * @return A merged set of CredentialsConfig
+     * @return CredentialsConfig A merged set of CredentialsConfig
      */
     private static function _merge(CredentialsConfig $a, CredentialsConfig $b)
         : CredentialsConfig
@@ -219,7 +232,7 @@ class Credentials
      * @param CredentialsConfig $creds    A set of credentials to merge with
      * @param string            $filename The path to the credentials file
      *
-     * @return The merged credentials
+     * @return CredentialsConfig The merged credentials
      */
     private static function _mergeWithDefault(
         CredentialsConfig $creds,
@@ -355,22 +368,27 @@ class Credentials
         }
 
         if (empty($config)) {
-            $creds->config = [
-                'loging' => [
-                    'verbose' => false,
-                ],
-                'event_reporting' => [
-                    'minimum_count' => 5,
-                    'flush_interval' => 2,
-                    'destroy_report_async' => false
-                ],
-                'key_caching' => [
-                    'unstructured'  => false,
-                    'structured'  => false,
-                    'encrypt'       => false,
-                ],
-                'dataset_caching' => true
-            ];
+            $creds->config = json_decode('
+                {
+                    "logging": {
+                        "verbose": true
+                    },
+                    "event_reporting": {
+                        "minimum_event_count": 5,
+                        "flush_interval": 2,
+                        "trap_exceptions": false,
+                        "timestamp_granularity": "SECONDS",
+                        "destroy_report_async": false
+                    },
+                    "key_caching" : {
+                        "unstructured": true,
+                        "structured": true,
+                        "encrypted": false,
+                        "ttl_seconds" : 1800
+                    },
+                    "dataset_caching" : true
+                }
+            ');
         } else {
             $this->config = json_decode($config, true);
         }
@@ -379,6 +397,8 @@ class Credentials
         self::$datasetmanager = new \Ubiq\DatasetManager();
         self::$cachemanager = new \Ubiq\CacheManager();
         self::$eventprocessor = new \Ubiq\EventProcessor($this);
+
+        
     }
 
     /**

@@ -46,6 +46,8 @@ class CacheManager
 
     ];
 
+    private static $cache_ttl = [];
+
     /**
      * Get a cache key
      *
@@ -57,6 +59,10 @@ class CacheManager
     public static function get(string $cache_type, string $key)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
+            return false;
+        }
+
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] > time()) {
             return false;
         }
 
@@ -92,7 +98,17 @@ class CacheManager
             return [];
         }
 
-        return self::$caches[$cache_type];
+        // loop through to validate TTL on anything in the cache
+        $return = [];
+        foreach (self::$caches[$cache_type] as $key) {
+            $item = self::get($cache_type, $key);
+            
+            if (!empty($item)) {
+                $return[] = $item;
+            }
+        }
+
+        return $return;
     }
 
     /**
@@ -104,6 +120,12 @@ class CacheManager
      */
     public static function clearAll(string $cache_type)
     {
+        foreach (self::$caches[$cache_type] as $key) {
+            if (array_key_exists($cache_type . $key, self::$cache_ttl)) {
+                unset(self::$cache_ttl[$cache_type . $key]);
+            }
+        }
+
         self::$caches[$cache_type] = [];
     }
 
@@ -124,8 +146,14 @@ class CacheManager
         }
 
         if (!array_key_exists($key, self::$caches[$cache_type])) {
-             $return = false;
+            $return = false;
 
+            return;
+        }
+
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] > time()) {
+            $return = false;
+            
             return;
         }
 
@@ -141,9 +169,8 @@ class CacheManager
      * @param string $key        The key to set
      * @param string $val        The value to set
      * 
-     * @return Null if not found
      */
-    public static function set(string $cache_type, string $key, $val)
+    public static function set(string $cache_type, string $key, $val, ?int $ttl_timestamp = NULL)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return null;
@@ -153,7 +180,22 @@ class CacheManager
     }
 
     /**
+     * Set the TTL for a cached type/key pair
+     *
+     * @param string $cache_type The cache type to set
+     * @param string $key        The key to set
+     * @param ?int $ttl_timestamp The timestamp when this cached item expires
+     * 
+     * @return None
+     */
+    public static function setTTL(string $cache_type, string $key, int $ttl_timestamp)
+    {
+        self::$cache_ttl[$cache_type . $key] = $ttl_timestamp;
+    }
+
+    /**
      * Copy a cache value to another key
+     * Does not retain TTL
      *
      * @param string $cache_type The cache type to set
      * @param string $source_key The key to copy from
