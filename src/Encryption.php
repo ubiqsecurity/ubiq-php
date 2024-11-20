@@ -26,9 +26,16 @@ namespace Ubiq;
 class Encryption
 {
 
-    private $_key_raw, $_key_enc;
-    private $_session, $_fingerprint;
-    private $_algorithm, $_fragment;
+    private $_key_raw;
+    private $_key_enc;
+    private $_session;
+    private $_fingerprint;
+    private $_algorithm;
+    private $_fragment;
+
+    private $key = null;
+    private ?Dataset $_dataset = null;
+    private ?Credentials $_creds = null;
 
     private $_header;
 
@@ -65,24 +72,24 @@ class Encryption
                 $dataset,
                 (!$multiple_uses) && ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED)
             );
-
         }
 
+        $this->key = $key;
         $this->_key_enc = $key['_key_enc'] ?? null;
         $this->_key_raw = $key['_key_raw'] ?? null;
         $this->_session = $key['_session'] ?? null;
         $this->_fingerprint = $key['_fingerprint'] ?? null;
         $this->_algorithm = $key['_algorithm'] ?? null;
         $this->_fragment = $key['_fragment'] ?? null;
-        
         $this->_dataset = $dataset;
         $this->_creds = $creds;
     }
 
+
     /**
      * Begin encryption of a new plaintext
      *
-     * @return A string containing the initial portion of the ciphertext
+     * @return string A string containing the initial portion of the ciphertext
      */
     public function begin() : string
     {
@@ -142,7 +149,7 @@ class Encryption
      *
      * @param string $plaintext The ciphertext to be decrypted
      *
-     * @return A string containing a portion of the ciphertext. This
+     * @return string A string containing a portion of the ciphertext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
@@ -150,10 +157,10 @@ class Encryption
     {
         // structured does not have incremental
         if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
-            return $this->update_structured($plaintext);
+            return $this->updateStructured($plaintext);
         }
         elseif ($this->_dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
-            return $this->update_unstructured($plaintext);
+            return $this->updateUnstructured($plaintext);
         }
     }
 
@@ -162,11 +169,11 @@ class Encryption
      *
      * @param string $plaintext The plaintext to be encrypted
      *
-     * @return A string containing a portion of the ciphertext. This
+     * @return string A string containing a portion of the ciphertext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
-    public function update_unstructured(string $plaintext) : string
+    public function updateUnstructured(string $plaintext) : string
     {
         if (is_null($this->_header)) {
             throw new \Exception(
@@ -203,23 +210,86 @@ class Encryption
 
     /**
      * Encrypt the given ciphertext for structured
-     * Implementation of FF-1 algorithm per
-     * https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-38Gr1-draft.pdf
      *
      * @param string $plaintext The plaintext to be decrypted
      *
-     * @return A string containing the ciphertext
+     * @return string A string containing the ciphertext
      */
-    public function update_structured($plaintext)
+    public function updateStructured($plaintext) : string
     {
-        // run ff1 encrypt
-        return $plaintext;
+        $prefix_str = '';
+        $suffix_str = '';
+        $mask_str = '';
+        $encrypt_str = $plaintext;
+        $passthrough_vals = str_split($this->_dataset->structured_config['passthrough']);
+        $passthrough_chars = array_flip($passthrough_vals);
+        $input_chars = array_flip(str_split($this->_dataset->structured_config['input_character_set']));
+
+        foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
+            if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
+                $prefix_str = substr($plaintext, 0, $action['length']);
+                $encrypt_str = substr($encrypt_str, $action['length']);
+
+                ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $encrypt_str);
+            }
+            if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
+                $suffix_str = substr($plaintext, -$action['length']);
+                $encrypt_str = substr($encrypt_str, 0, $action['length']);
+
+                ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $encrypt_str);
+            }
+        }
+
+        if (!empty($passthrough_chars)) {
+            $mask_str = $encrypt_str;
+            $encrypt_str = str_replace($passthrough_vals, '', $encrypt_str);
+
+            ubiq_debug($this->_creds, 'Parsing for partial encryption remove passthrough chars to result in ' . $encrypt_str);
+        }
+
+        // Validate trimmed input
+        foreach (str_split($encrypt_str) as $char) {
+            if (!array_key_exists($char, $input_chars)) {
+                throw new \Exception('Invalid character found in the input: ' . $char);
+            }
+        }
+    
+        if (strlen($encrypt_str) < $this->_dataset->structured_config['min_input_length']) {
+            throw new \Exception('Invalid input length does not meet minimum of ' . $this->_dataset->structured_config['min_input_length']);
+        }
+    
+        if (strlen($encrypt_str) > $this->_dataset->structured_config['max_input_length']) {
+            throw new \Exception('Invalid input length exceeds maximum of ' . $this->_dataset->structured_config['max_input_length']);
+        }
+    
+        $cipher = new FF1(
+            $this->_creds,
+            $this->_key_raw,
+            $this->_dataset->structured_config['input_character_set']
+        );
+
+        $cipher_str = $cipher->encryptToOutput($encrypt_str, $this->_dataset, $this->_key_enc);
+
+        $formatted_str = '';
+
+        $k = 0;
+        for ($i = 0; $i < strlen($mask_str); $i++) {
+            if (!array_key_exists($mask_str[$i], $passthrough_chars)) {
+                $formatted_str .= $cipher_str[$k];
+                $k++;
+            }
+            else {
+                $formatted_str .= $mask_str[$i];
+            }
+        }
+
+        return $prefix_str . $formatted_str . $suffix_str;
     }
 
     /**
      * End the current encryption process
      *
-     * @return A string containing any remaining ciphertext or authentication
+     * @return string A string containing any remaining ciphertext or authentication
      *         information. This string should be appended to the string
      *         returned by the most recent call to either begin() or update()
      */
@@ -247,6 +317,47 @@ class Encryption
 
         return $ret;
     }
+
+    // async EncryptForSearchAsync(ffsName, plainText, tweak) {
+    //     try {
+    
+    //       // Will return the array of keys from 0 .. current_key unless the data key has been rotated too many times
+    //       const data = await this.ubiqWebServices.GetFFSAndDataKeys(ffsName);
+    
+    //       var ffs = data[ffsName]['ffs']
+    
+    //       this.ffsCacheManager.AddToCache(ffsName, ffs)
+    
+    //       var encrypted_private_key = data[ffsName]['encrypted_private_key']
+    //       var privateKey = forge.pki.decryptRsaPrivateKey(encrypted_private_key, this.srsa);
+    
+    //       var current_key_number = data[ffsName]['current_key_number']
+    
+    //       var keys = data[ffsName]['keys']
+    
+    //       // Add for active key (null) and actual current_key_number.
+    //       this.AddFF1(ffs, privateKey, keys[current_key_number], null, current_key_number)
+    
+    //       let ct = []
+    
+    //       // Add of the the Dataset keys to the cache and calculate the cipher text
+    //       for (let i = 0; i < keys.length; i++) {
+    //         var ctx = null
+    //         const ctx_and_key = this.Ff1CacheManager.GetCache(ffs.name, i)
+    //         if (!ctx_and_key) {
+    //           let ctx2 = this.AddFF1(ffs, privateKey, keys[i], i, i)
+    //           ctx = ctx2.ctx
+    //         } else {
+    //           ctx = ctx_and_key.ctx
+    //         }
+    //         ct.push(await this.EncryptAsyncKeyNumber(ctx, ffs, plainText, tweak, i))
+    //       }
+    
+    //       return ct
+    //     } catch (ex) {
+    //       throw new Error(ex.message);
+    //     }
+    //   }
 
 
     /**

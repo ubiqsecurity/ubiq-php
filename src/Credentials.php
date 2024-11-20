@@ -56,13 +56,13 @@ class CredentialsConfig
  */
 class Credentials
 {
-    private static ?CredentialsConfig $_creds = null;
+    private static ?CredentialsConfig $_config = null;
 
     public static ?KeyManager $keymanager = null;
     public static ?DatasetManager $datasetmanager = null;
     public static ?CacheManager $cachemanager = null;
     public static ?EventProcessor $eventprocessor = null;
-    public static $config = null;
+    public static array $config = [];
 
     /**
      * Getter for Papi
@@ -71,7 +71,7 @@ class Credentials
      */
     public function getPapi() : string
     {
-        return $this->_creds->papi;
+        return $this::$_config->papi;
     }
 
     /**
@@ -81,7 +81,7 @@ class Credentials
      */
     public function getSapi() : string
     {
-        return $this->_creds->sapi;
+        return $this::$_config->sapi;
     }
 
     /**
@@ -91,7 +91,7 @@ class Credentials
      */
     public function getSrsa() : string
     {
-        return $this->_creds->srsa;
+        return $this::$_config->srsa;
     }
 
     /**
@@ -101,7 +101,7 @@ class Credentials
      */
     public function getHost() : string
     {
-        return $this->_creds->host;
+        return $this::$_config->host;
     }
 
     /**
@@ -255,8 +255,8 @@ class Credentials
     public function complete()
         : bool
     {
-        return $this->_creds &&
-            $this->_creds->viable() && $this->_creds->host;
+        return $this::$_config &&
+            $this::$_config->viable() && $this::$_config->host;
     }
 
     /**
@@ -273,23 +273,23 @@ class Credentials
         string $papi, string $sapi, string $srsa,
         ?string $host = null
     ) : bool {
-        $creds = new CredentialsConfig();
+        $config = new CredentialsConfig();
 
-        $creds->papi = $papi;
-        $creds->sapi = $sapi;
-        $creds->srsa = $srsa;
-        $creds->host = $host;
+        $config->papi = $papi;
+        $config->sapi = $sapi;
+        $config->srsa = $srsa;
+        $config->host = $host;
 
-        if ($creds->viable()) {
-            if (!$creds->host) {
-                $creds->host = 'https://api.ubiqsecurity.com';
-            } else if (substr($creds->host, 0, 7) !== 'http://'
-                && substr($creds->host, 0, 8) !== 'https://'
+        if ($config->viable()) {
+            if (!$config->host) {
+                $config->host = 'https://api.ubiqsecurity.com';
+            } else if (substr($config->host, 0, 7) !== 'http://'
+                && substr($config->host, 0, 8) !== 'https://'
             ) {
-                $creds->host = 'https://' . $creds->host;
+                $config->host = 'https://' . $config->host;
             }
 
-            $this->_creds = $creds;
+            $this::$_config = $config;
         }
 
         return $this->complete();
@@ -368,7 +368,7 @@ class Credentials
         }
 
         if (empty($config)) {
-            $creds->config = json_decode('
+            $config = json_decode('
                 {
                     "logging": {
                         "verbose": true
@@ -383,22 +383,21 @@ class Credentials
                     "key_caching" : {
                         "unstructured": true,
                         "structured": true,
-                        "encrypted": false,
+                        "encrypt": false,
                         "ttl_seconds" : 1800
                     },
                     "dataset_caching" : true
                 }
             ');
         } else {
-            $this->config = json_decode($config, true);
+            $config = json_decode($config, true);
         }
 
         self::$keymanager = new \Ubiq\KeyManager();
         self::$datasetmanager = new \Ubiq\DatasetManager();
         self::$cachemanager = new \Ubiq\CacheManager();
         self::$eventprocessor = new \Ubiq\EventProcessor($this);
-
-        
+        self::$config = $config;
     }
 
     /**

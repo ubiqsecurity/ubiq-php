@@ -24,11 +24,16 @@ foreach (array(
                 'Decryption.php',
                 'Encryption.php',
                 'EventProcessor.php',
+                'FF1.php',
                 'KeyManager.php',
-                'Request.php'
+                'Request.php',
+                'Structured.php'
             ) as $file) {
     include implode(DIRECTORY_SEPARATOR, array(__DIR__, $file));
 }
+
+require realpath(__DIR__ . '/../vendor/autoload.php');
+
 
 const VERSION = '2.0.0';
 const LIBRARY = 'ubiq-php';
@@ -94,8 +99,8 @@ function decrypt(Credentials $credentials, string $ciphertext, $dataset = null)
 function ubiq_debug(?Credentials $creds, string $msg)
 {
     if (!empty($creds)
-        && !empty($creds->config)
-        && ($creds->config['logging']['verbose'] ?? false)
+        && !empty($creds::$config)
+        && ($creds::$config['logging']['verbose'] ?? false)
     ) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }

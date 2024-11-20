@@ -43,7 +43,7 @@ class DatasetManager
             return $dataset;
         }
 
-        $no_cache = !($creds->config['dataset_caching'] ?? true);
+        $no_cache = !($creds::$config['dataset_caching'] ?? true);
 
         ubiq_debug($creds, 'Starting getDatasetConfig for ' . $dataset);
 
