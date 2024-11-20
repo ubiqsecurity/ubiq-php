@@ -76,7 +76,7 @@ class CacheManager
      * 
      * @return The number of elements in the cache
      */
-    public static function getCount(string $cache_type)
+    public static function getsizeof(string $cache_type)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return -1;
@@ -101,7 +101,9 @@ class CacheManager
         // loop through to validate TTL on anything in the cache
         $return = [];
         foreach (self::$caches[$cache_type] as $key) {
-            $item = self::get($cache_type, $key);
+            $key_idx = (is_string($key) == 'string' ? $key : $key->getKey());
+            
+            $item = self::get($cache_type, $key_idx);
             
             if (!empty($item)) {
                 $return[] = $item;
@@ -121,8 +123,10 @@ class CacheManager
     public static function clearAll(string $cache_type)
     {
         foreach (self::$caches[$cache_type] as $key) {
-            if (array_key_exists($cache_type . $key, self::$cache_ttl)) {
-                unset(self::$cache_ttl[$cache_type . $key]);
+            $key_idx = (is_string($key) == 'string' ? $key : $key->getKey());
+
+            if (array_key_exists($cache_type . $key_idx, self::$cache_ttl)) {
+                unset(self::$cache_ttl[$cache_type . $key_idx]);
             }
         }
 

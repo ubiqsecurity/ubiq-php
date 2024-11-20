@@ -25,10 +25,16 @@ namespace Ubiq;
  */
 class Decryption
 {
-    private $_key_raw, $_key_enc;
-    private $_session, $_fingerprint;
-    private $_algorithm, $_fragment;
-    private $_creds, $_dataset;
+    private $_key_raw;
+    private $_key_enc;
+    private $_session;
+    private $_fingerprint;
+    private $_algorithm;
+    private $_fragment;
+
+    private $key = null;
+    private ?Dataset $_dataset = null;
+    private ?Credentials $_creds = null;
 
     private $_iv;
 
@@ -60,7 +66,7 @@ class Decryption
      *
      * No data has been provided, yet, so this function can't do anything.
      *
-     * @return A string containing the initial portion of the plaintext
+     * @return string A string containing the initial portion of the plaintext
      */
     public function begin() : string
     {
@@ -95,7 +101,7 @@ class Decryption
      * @param string $ciphertext The ciphertext (obviously containing
      *                           the header) to be parsed
      *
-     * @return An associative array containing the following elements:
+     * @return array An associative array containing the following elements:
      *         version, flags, algoid, iv, key_enc, and content
      */
     private function _ctparse(string &$ciphertext) : array
@@ -136,7 +142,7 @@ class Decryption
      *
      * @param string $ciphertext The ciphertext to be decrypted
      *
-     * @return A string containing a portion of the plaintext. This
+     * @return string A string containing a portion of the plaintext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
@@ -144,10 +150,10 @@ class Decryption
     {
         // structured does not have incremental
         if ($this->_dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
-            return $this->update_structured($ciphertext);
+            return $this->updateStructured($ciphertext);
         }
         elseif ($this->_dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
-            return $this->update_unstructured($ciphertext);
+            return $this->updateUnstructured($ciphertext);
         }
     }
 
@@ -156,11 +162,11 @@ class Decryption
      *
      * @param string $ciphertext The ciphertext to be decrypted
      *
-     * @return A string containing a portion of the plaintext. This
+     * @return string A string containing a portion of the plaintext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
-    public function update_unstructured(string $ciphertext) : string
+    public function updateUnstructured(string $ciphertext) : string
     {
         if (is_null($this->_iv)) {
             throw new \Exception(
@@ -187,6 +193,7 @@ class Decryption
             $header
         );
 
+        $this->$key = $key;
         $this->_key_enc = $key['_key_enc'] ?? null;
         $this->_key_raw = $key['_key_raw'] ?? null;
         $this->_session = $key['_session'] ?? null;
@@ -225,28 +232,80 @@ class Decryption
      *
      * @param string $ciphertext The ciphertext to be decrypted
      *
-     * @return A string containing the plaintext
+     * @return string A string containing the plaintext
      */
-    public function update_structured(string $ciphertext) : string
+    public function updateStructured(string $ciphertext) : string
     {
-        $headers = [
-            'key_number' => 1
-        ]; // parse(keynum)
+        $prefix_str = '';
+        $suffix_str = '';
+        $mask_str = '';
+        $decrypt_str = $ciphertext;
+        $passthrough_vals = str_split($this->_dataset->structured_config['passthrough']);
+        $passthrough_chars = array_flip($passthrough_vals);
+        $input_chars = array_flip(str_split($this->_dataset->structured_config['input_character_set']));
+
+        foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
+            if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
+                $prefix_str = substr($ciphertext, 0, $action['length']);
+                $decrypt_str = substr($decrypt_str, $action['length']);
+
+                ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $decrypt_str);
+            }
+            if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
+                $suffix_str = substr($ciphertext, -$action['length']);
+                $decrypt_str = substr($decrypt_str, 0, $action['length']);
+
+                ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $decrypt_str);
+            }
+        }
+
+        if (!empty($passthrough_chars)) {
+            $mask_str = $decrypt_str;
+            $decrypt_str = str_replace($passthrough_vals, '', $decrypt_str);
+
+            ubiq_debug($this->_creds, 'Parsing for partial encryption remove passthrough chars to result in ' . $decrypt_str);
+        }
 
         $key = $this->_creds::$keymanager->getDecryptionKey(
             $this->_creds,
             $this->_dataset,
-            $headers
+            ['key_number' => FF1::decodeKeyNumber($ciphertext, $this->_dataset)]
         );
 
-        return $ciphertext;
-        // run ff1 decrypt
+        $this->key = $key;
+        $this->_key_enc = $key['_key_enc'] ?? null;
+        $this->_key_raw = $key['_key_raw'] ?? null;
+        $this->_session = $key['_session'] ?? null;
+        $this->_fingerprint = $key['_fingerprint'] ?? null;
+        $this->_algorithm = $key['_algorithm'] ?? null;
+
+        $cipher = new FF1(
+            $this->_creds,
+            $this->_key_raw,
+            $this->_dataset->structured_config['input_character_set']
+        );
+
+        $plaintext_str = $cipher->decryptToOutput($decrypt_str, $this->_dataset, $this->_key_enc);
+        $formatted_str = '';
+
+        $k = 0;
+        for ($i = 0; $i < strlen($mask_str); $i++) {
+            if (!array_key_exists($mask_str[$i], $passthrough_chars)) {
+                $formatted_str .= $plaintext_str[$k];
+                $k++;
+            }
+            else {
+                $formatted_str .= $mask_str[$i];
+            }
+        }
+
+        return $prefix_str . $formatted_str . $suffix_str;
     }
 
     /**
      * End the current decryption process
      *
-     * @return A string containing any remaining ciphertext or authentication
+     * @return string A string containing any remaining ciphertext or authentication
      *         information. This string should be appended to the string
      *         returned by the most recent call to either begin() or update()
      */

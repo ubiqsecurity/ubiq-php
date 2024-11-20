@@ -31,7 +31,7 @@ class KeyManager
      * @return int TTL seconds
      */
     private static function getCacheTTL(Credentials $creds) {
-        return $creds->config['key_caching']['ttl_seconds'] ?? 1800;
+        return $creds::$config['key_caching']['ttl_seconds'] ?? 1800;
     }
 
     /**
@@ -95,7 +95,7 @@ class KeyManager
             $return = $cache;
 
             // if caching and encrypting, decrypt the key
-            if ($creds->config['key_caching']['encrypted']) {
+            if ($creds::$config['key_caching']['encrypt']) {
                 ubiq_debug($creds, 'Cached keys are encrypted; decrypting prior to returning');
                 
                 $pkey = openssl_pkey_get_private(
@@ -173,7 +173,7 @@ class KeyManager
             ubiq_debug($creds, 'Caching key for ' . $dataset->name . ' for key ' . $key_idx);
             ubiq_debug($creds, 'Setting TTL for ' . $dataset->name . ' for key ' . $key_idx . ' to ' . self::getCacheTTL($creds) . ' seconds');
 
-            if (!$creds->config['key_caching']['encrypted']) {
+            if (!$creds::$config['key_caching']['encrypt']) {
                 ubiq_debug($creds, 'Cached keys are NOT encrypted; decrypting prior to cache');
             
                 $cache_data['_key_raw'] = $key_raw;
@@ -208,15 +208,15 @@ class KeyManager
     private function _shouldCache(Credentials $creds, Dataset $dataset)
     {
         if ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
-            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_UNSTRUCTURED . ' is ' . $creds->config['key_caching']['unstructured']);
+            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_UNSTRUCTURED . ' is ' . $creds::$config['key_caching']['unstructured']);
 
-            return ($creds->config['key_caching']['unstructured']);
+            return ($creds::$config['key_caching']['unstructured']);
         }
 
         if ($dataset->type == DatasetManager::DATASET_TYPE_STRUCTURED) {
-            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_STRUCTURED . ' is ' . $creds->config['key_caching']['structured']);
+            ubiq_debug($creds, 'Key caching configuration for ' . DatasetManager::DATASET_TYPE_STRUCTURED . ' is ' . $creds::$config['key_caching']['structured']);
 
-            return ($creds->config['key_caching']['structured']);
+            return ($creds::$config['key_caching']['structured']);
         }
 
         return true;
@@ -251,7 +251,7 @@ class KeyManager
         $cache = $this->getKeyDefault($creds, $dataset);
 
         if (empty($cache)) {
-            ubiq_debug($creds, 'Getting encryption key from backend for ' . $dataset->name);
+            ubiq_debug($creds, 'Getting encryption key from backend for ' . $dataset->type . ' ' . $dataset->name);
 
             $http = new Request(
                 $creds->getPapi(), $creds->getSapi()
