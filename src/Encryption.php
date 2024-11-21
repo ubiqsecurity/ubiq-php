@@ -56,17 +56,21 @@ class Encryption
      *                                   Will default to null, which will be derived
      *                                   based on access
      * @param Bool        $multiple_uses If the encryption key should be re-used
+     * @param string      $key           A key to be used to encrypt; if not provided,
+     *                                   the current one will be fetched
+     *                                   (optional)
      */
     public function __construct(
         Credentials $creds = null,
         $dataset = null,
-        $multiple_uses = false
+        $multiple_uses = false,
+        $key = NULL
     ) {
         $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
 
         ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' use(s)');
 
-        if ($creds) {
+        if ($creds && !empty($key)) {
             $key = $creds::$keymanager->getEncryptionKey(
                 $creds,
                 $dataset,
@@ -215,8 +219,9 @@ class Encryption
      *
      * @return string A string containing the ciphertext
      */
-    public function updateStructured($plaintext) : string
-    {
+    public function updateStructured(
+        $plaintext
+    ) : string {
         $prefix_str = '';
         $suffix_str = '';
         $mask_str = '';
@@ -265,6 +270,7 @@ class Encryption
         $cipher = new FF1(
             $this->_creds,
             $this->_key_raw,
+            $this->_dataset->structured_config['tweak'],
             $this->_dataset->structured_config['input_character_set']
         );
 
@@ -282,6 +288,8 @@ class Encryption
                 $formatted_str .= $mask_str[$i];
             }
         }
+        
+        ubiq_debugv('final value ' . $prefix_str . $formatted_str . $suffix_str);
 
         return $prefix_str . $formatted_str . $suffix_str;
     }
@@ -317,47 +325,6 @@ class Encryption
 
         return $ret;
     }
-
-    // async EncryptForSearchAsync(ffsName, plainText, tweak) {
-    //     try {
-    
-    //       // Will return the array of keys from 0 .. current_key unless the data key has been rotated too many times
-    //       const data = await this.ubiqWebServices.GetFFSAndDataKeys(ffsName);
-    
-    //       var ffs = data[ffsName]['ffs']
-    
-    //       this.ffsCacheManager.AddToCache(ffsName, ffs)
-    
-    //       var encrypted_private_key = data[ffsName]['encrypted_private_key']
-    //       var privateKey = forge.pki.decryptRsaPrivateKey(encrypted_private_key, this.srsa);
-    
-    //       var current_key_number = data[ffsName]['current_key_number']
-    
-    //       var keys = data[ffsName]['keys']
-    
-    //       // Add for active key (null) and actual current_key_number.
-    //       this.AddFF1(ffs, privateKey, keys[current_key_number], null, current_key_number)
-    
-    //       let ct = []
-    
-    //       // Add of the the Dataset keys to the cache and calculate the cipher text
-    //       for (let i = 0; i < keys.length; i++) {
-    //         var ctx = null
-    //         const ctx_and_key = this.Ff1CacheManager.GetCache(ffs.name, i)
-    //         if (!ctx_and_key) {
-    //           let ctx2 = this.AddFF1(ffs, privateKey, keys[i], i, i)
-    //           ctx = ctx2.ctx
-    //         } else {
-    //           ctx = ctx_and_key.ctx
-    //         }
-    //         ct.push(await this.EncryptAsyncKeyNumber(ctx, ffs, plainText, tweak, i))
-    //       }
-    
-    //       return ct
-    //     } catch (ex) {
-    //       throw new Error(ex.message);
-    //     }
-    //   }
 
 
     /**

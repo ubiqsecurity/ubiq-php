@@ -1,15 +1,14 @@
 # Changelog
 
 ## 2.0.0 - 6/27/2023
+* Added support for structured datasets
+* Added encryptForSearch method
 * Added user defined metadata to events
 * Configurable error handling for event reporting
 * Time granularity for event reporting
 * Add support for cache TTL
 * Update config structure
 
-#TODO get radix conversion working
-#TODO get decryption working
-#TODO implement FF1
 #TODO add unstructured api to replace DatasetManager:110
 #TODO add unit tests for time granularity
 #TODO add unit tests for metadata

@@ -31,7 +31,7 @@ class DatasetManager
      * Will convert to a Dataset object
      *
      * @param Credentials $creds    Credentials object to operate on
-     * @param string      $dataset_name Name of dataset
+     * @param var         $dataset_name Dataset or string name of dataset
      * 
      * @return Dataset of dataset
      */

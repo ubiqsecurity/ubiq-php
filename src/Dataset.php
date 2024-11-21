@@ -63,7 +63,7 @@ class Dataset
         if (!is_object($o)) {
             return false;
         }
-        if (get_class($o) != 'Dataset') {
+        if (get_class($o) != 'Dataset' && get_class($o) != 'Ubiq\\Dataset') {
             return false;
         }
 

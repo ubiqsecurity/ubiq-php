@@ -25,8 +25,9 @@ namespace Ubiq;
  */
 class Request
 {
-    private $_papi, $_sapi;
-    private $_curl;
+    private string $_papi;
+    private string $_sapi;
+    private \CurlHandle $_curl;
 
     /**
      * Sign an http/s request
@@ -173,7 +174,7 @@ class Request
      * @param string $ctype   The content type
      * @param bool   $execute Whether or not to execute the curl or return the handle
      *
-     * @return An associative array containing 'status', 'content_type', and
+     * @return array An associative array containing 'status', 'content_type', and
      *         'content' or false
      */
     private function _do(
@@ -182,7 +183,7 @@ class Request
         ?string $content,
         ?string $ctype,
         bool $execute = true
-    ) {
+    ) : array {
         $ret = false;
         $headers = array();
         $response = '';
