@@ -274,6 +274,7 @@ class FF1
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
                
         ubiq_debugv('iv ' .  implode(',', $iv));
+        // $iv = implode("", array_map("chr", $iv)); // make sure this is outside the loop
             
         $key = array_values(unpack('C*', $this->key));
         ubiq_debugv('key ' .  implode(',', $key));
@@ -283,12 +284,13 @@ class FF1
         // OpenSSL encryption using AES-128-CBC with no padding
         $src_length = sizeof($src) - $src_offset;
 
+        
         $aes = new \phpseclib3\Crypt\AES('cbc');
         $aes->setKey(implode("", array_map("chr", $key)));
         $aes->setIV(implode("", array_map("chr", $iv)));
         $aes->disablePadding();
-        $aes->disableContinuousBuffer();
-        // $aes->setPreferredEngine('Eval');
+        $aes->enableContinuousBuffer();
+
         ubiq_debugv('getEngine ' .  $aes->getEngine());
 
         for ($i = 0; $i < $length && $i < $src_length; $i += self::BLOCK_SIZE) {
@@ -301,37 +303,44 @@ class FF1
             $encrypted = $aes->encrypt(implode("", array_map("chr", $src_part)));
             
             // known results from node
-            if (($enc && $it == 0) || (!$enc && $it == 9)) {
-                $encrypted = implode("", array_map("chr", [52,46,140,41,31,31,85,172,194,31,200,204,137,251,44,65]));
-            } elseif (($enc && $it == 1) || (!$enc && $it == 8)) {
-                $encrypted = implode("", array_map("chr", [83,1,193,142,170,145,143,77,68,48,248,84,5,53,98,187]));
-            } elseif (($enc && $it == 2) || (!$enc && $it == 7)) {
-                $encrypted = implode("", array_map("chr", [238,239,60,224,204,17,228,122,217,196,106,46,43,185,91,135]));
-            } elseif (($enc && $it == 3) || (!$enc && $it == 6)) {
-                $encrypted = implode("", array_map("chr", [161,91,255,84,13,65,163,90,26,51,210,45,21,108,149,240]));
-            } elseif (($enc && $it == 4) || (!$enc && $it == 5)) {
-                $encrypted = implode("", array_map("chr", [212,68,32,20,71,244,233,201,112,42,200,168,55,99,23,139]));
-            } elseif (($enc && $it == 5) || (!$enc && $it == 4)) {
-                $encrypted = implode("", array_map("chr", [135,60,184,130,58,79,213,180,26,36,255,237,124,146,95,132]));
-            } elseif (($enc && $it == 6) || (!$enc && $it == 3)) {
-                $encrypted = implode("", array_map("chr", [19,121,148,146,65,230,238,195,5,114,44,160,164,200,203,164]));
-            } elseif (($enc && $it == 7) || (!$enc && $it == 2)) {
-                $encrypted = implode("", array_map("chr", [61,36,110,203,209,129,98,141,49,141,114,150,70,190,144,219]));
-            } elseif (($enc && $it == 8) || (!$enc && $it == 1)) {
-                $encrypted = implode("", array_map("chr", [217,205,126,70,16,191,228,243,171,9,70,103,248,177,250,236]));
-            } elseif (($enc && $it == 9) || (!$enc && $it == 0)) {
-                $encrypted = implode("", array_map("chr", [214,80,49,79,163,188,145,51,63,183,127,236,19,74,68,170]));
-            }
+            // if (($enc && $it == 0) || (!$enc && $it == 9)) {
+            //     $encrypted = implode("", array_map("chr", [52,46,140,41,31,31,85,172,194,31,200,204,137,251,44,65]));
+            // } elseif (($enc && $it == 1) || (!$enc && $it == 8)) {
+            //     $encrypted = implode("", array_map("chr", [83,1,193,142,170,145,143,77,68,48,248,84,5,53,98,187]));
+            // } elseif (($enc && $it == 2) || (!$enc && $it == 7)) {
+            //     $encrypted = implode("", array_map("chr", [238,239,60,224,204,17,228,122,217,196,106,46,43,185,91,135]));
+            // } elseif (($enc && $it == 3) || (!$enc && $it == 6)) {
+            //     $encrypted = implode("", array_map("chr", [161,91,255,84,13,65,163,90,26,51,210,45,21,108,149,240]));
+            // } elseif (($enc && $it == 4) || (!$enc && $it == 5)) {
+            //     $encrypted = implode("", array_map("chr", [212,68,32,20,71,244,233,201,112,42,200,168,55,99,23,139]));
+            // } elseif (($enc && $it == 5) || (!$enc && $it == 4)) {
+            //     $encrypted = implode("", array_map("chr", [135,60,184,130,58,79,213,180,26,36,255,237,124,146,95,132]));
+            // } elseif (($enc && $it == 6) || (!$enc && $it == 3)) {
+            //     $encrypted = implode("", array_map("chr", [19,121,148,146,65,230,238,195,5,114,44,160,164,200,203,164]));
+            // } elseif (($enc && $it == 7) || (!$enc && $it == 2)) {
+            //     $encrypted = implode("", array_map("chr", [61,36,110,203,209,129,98,141,49,141,114,150,70,190,144,219]));
+            // } elseif (($enc && $it == 8) || (!$enc && $it == 1)) {
+            //     $encrypted = implode("", array_map("chr", [217,205,126,70,16,191,228,243,171,9,70,103,248,177,250,236]));
+            // } elseif (($enc && $it == 9) || (!$enc && $it == 0)) {
+            //     $encrypted = implode("", array_map("chr", [214,80,49,79,163,188,145,51,63,183,127,236,19,74,68,170]));
+            // }
 
             ubiq_debugv('encrypted phpseclib ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
+            // if using openssl, the IV for subsequent encryption rounds
+            // is the encrypted byte array from the previous round
+            // phpseclib does with the continuousBuffer setting
+            // https://www.php.net/manual/en/function.openssl-encrypt.php
+            // https://api.phpseclib.com/1.0/Crypt_AES.html#method_enableContinuousBuffer
+            //
             // $encrypted = openssl_encrypt(
             //     implode("", array_map("chr", $src_part)),
             //     'aes-256-cbc',
             //     implode(array_map("chr", $key)),
             //     OPENSSL_RAW_DATA | OPENSSL_NO_PADDING,
-            //     implode("", array_map("chr", $iv)),
+            //     $iv,
             // );
+            // $iv = $encrypted;
             // ubiq_debugv('encrypted openssl ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
             if (!empty(openssl_error_string())) {
@@ -474,9 +483,11 @@ class FF1
             // convert numeral string B to an integer
             // export that integer as a byte array in to q
             $c = self::stringToBigInteger($B, $alphabet);
+            ubiq_debugv('c ' . $c->toString());
 
             // assume this is big-endian order because it came from the string
             $numb = array_values(unpack('C*', $c->toBytes()));
+            ubiq_debugv('numb ' . implode(',', $numb));
     
             if ($numb[0] == 0 && sizeof($numb) > 1) {
                 // Remove the extra byte if it exists
@@ -485,15 +496,13 @@ class FF1
             
             ubiq_debugv('sizeof($numb) ' . sizeof($numb));
 
-            if ($b <= sizeof($numb)) {
-                array_splice($PQ, sizeof($PQ) - $b, $b, array_slice($numb, 0, $b));
-            } else {
-                // Left pad with zeros
+            // Left pad with zeros
+            if ($b > sizeof($numb)) {
                 ubiq_debugv('adding zeros');
-
-                $PQ = self::padToBlockSize($PQ, sizeof($PQ) + $b - sizeof($numb) - 1, 0 & 0xFF);
-                array_splice($PQ, sizeof($PQ) - sizeof($numb), sizeof($numb), array_slice($numb, 0, sizeof($numb)));
+                $numb = self::padToBlockSize($numb, $b, 0);
             }
+            array_splice($PQ, sizeof($PQ) - $b, $b, array_slice($numb, 0, $b));
+            ubiq_debugv('PQ ' . implode(',', $PQ));
 
             // Step 6ii - perform encryption
             self::prf($PQ, 0, $R, 0, sizeof($PQ), $i, $encrypt);

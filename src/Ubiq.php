@@ -152,7 +152,7 @@ function ubiq_debug(?Credentials $creds, string $msg)
 // @codingStandardsIgnoreLine
 function ubiq_debugv(string $msg)
 {
-    if (TRUE) {
+    if (FALSE) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
 }
