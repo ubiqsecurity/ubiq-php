@@ -88,6 +88,41 @@ function decrypt(Credentials $credentials, string $ciphertext, $dataset = null)
 }
 
 /**
+ * Encrypt a given plaintext and retrieve all possible ciphertext variants
+ * for keys (key rotations) that have been used
+ *
+ * @param object $credentials   The credentials object
+ * @param string $plaintext     The plaintext data to be encrypted
+ * @param string $dataset       The dataset being encrypted on
+ *
+ * @return array Returns an array of ciphertexts
+ */
+function encryptForSearch(
+    Credentials $credentials,
+    string $plaintext,
+    $datasets = null,
+) {
+    $keys = $credentials::$keymanager->getAllEncryptionKeys(
+        $credentials,
+        $datasets
+    );
+
+    $cts = [];
+
+    foreach ($keys as $key_data) {
+        $enc = new Encryption($credentials, $key_data['dataset'], false, $key_data['key']);
+
+        $ct  = $enc->begin();
+        $ct .= $enc->update($plaintext);
+        $ct .= $enc->end();
+    
+        $cts[] = $ct;
+    }
+
+    return $cts;
+}
+
+/**
  * Debug output
  *
  * @param object $credentials The credentials object
@@ -102,6 +137,22 @@ function ubiq_debug(?Credentials $creds, string $msg)
         && !empty($creds::$config)
         && ($creds::$config['logging']['verbose'] ?? false)
     ) {
+        echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
+    }
+}
+
+/**
+ * Debug output
+ *
+ * @param object $credentials The credentials object
+ * @param string $message     Debug
+ *
+ * @return None
+ */
+// @codingStandardsIgnoreLine
+function ubiq_debugv(string $msg)
+{
+    if (TRUE) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
 }

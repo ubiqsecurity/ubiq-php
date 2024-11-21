@@ -242,7 +242,6 @@ class Decryption
         $decrypt_str = $ciphertext;
         $passthrough_vals = str_split($this->_dataset->structured_config['passthrough']);
         $passthrough_chars = array_flip($passthrough_vals);
-        $input_chars = array_flip(str_split($this->_dataset->structured_config['input_character_set']));
 
         foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
             if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
@@ -282,6 +281,7 @@ class Decryption
         $cipher = new FF1(
             $this->_creds,
             $this->_key_raw,
+            $this->_dataset->structured_config['tweak'],
             $this->_dataset->structured_config['input_character_set']
         );
 
@@ -298,6 +298,8 @@ class Decryption
                 $formatted_str .= $mask_str[$i];
             }
         }
+
+        ubiq_debugv('final value ' . $prefix_str . $formatted_str . $suffix_str);
 
         return $prefix_str . $formatted_str . $suffix_str;
     }

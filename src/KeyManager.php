@@ -348,6 +348,91 @@ class KeyManager
     }
 
     /**
+     * Get all encryption keys for a structured dataset for use with encryptForSearch
+     * Will cache if appropriate
+     *
+     * @param Credentials   $creds          Credentials object to operate on
+     * @param var           $dataset_names  String or array of strings for datasets to get a key for
+     * 
+     * @return array Array of keys data
+     */
+    public function getAllEncryptionKeys(
+        Credentials $creds = null,
+        $dataset_names = null
+    ) {
+        if (!is_array($dataset_names)) {
+            $dataset_names = [$dataset_names];
+        }
+
+        ubiq_debug($creds, 'Starting getAllEncryptionKeys for ' . implode(',', $dataset_names));
+
+        if (!$creds) {
+            throw new \Exception(
+                'No valid credentials'
+            );
+            
+            return;
+        }
+
+        $http = new Request(
+            $creds->getPapi(), $creds->getSapi()
+        );
+        
+        $resp = $http->get(
+            $creds->getHost() . '/api/v0/fpe/def_keys?papi=' . urlencode($creds->getPapi()) . '&ffs_name=' . urlencode(implode(',', $dataset_names)),
+            'application/json'
+        );
+
+        if (!$resp['success']) {
+            throw new \Exception(
+                'Request for ' . implode(',', $dataset_names) . ' encryption keys returned ' . $resp['status']
+            );
+
+            return;
+        }
+            
+        $json = json_decode($resp['content'], true);
+        $keys = [];
+        
+        foreach ($json as $dataset_name => $values) {
+            $dataset = new Dataset($dataset_name, null, DatasetManager::DATASET_TYPE_STRUCTURED, $values['ffs']);
+            
+            $creds::$cachemanager::set(
+                CacheManager::CACHE_TYPE_DATASET_CONFIGS, $dataset->name, $dataset
+            );
+
+            foreach ($values['keys'] as $idx => $key) {
+
+                // same comments apply here as in getEncryptionKey
+                // key array is only the key material of the wrapped data key
+                $cache = [
+                    'key_idx'       => md5(base64_encode($idx)),
+                    '_key_enc'      => $idx,
+                    '_key_enc_prv'  => $values['encrypted_private_key'],
+                    '_key_raw'      => base64_decode($key),
+                    '_session'      => NULL,
+                    '_fingerprint'  => NULL,
+                    '_algorithm'    => new Algorithm('ff1'),
+                    '_fragment'     => NULL,
+                ];
+
+                $cache = $this->cacheKey($creds, $dataset, $cache);
+
+                $keys[] = [
+                    'dataset' => $dataset,
+                    'key' => $cache
+                ];
+            }
+
+            ubiq_debug($creds, 'Got encryption keys from backend for ' . implode(',', $dataset_names));
+            
+            ubiq_debug($creds, 'Finished getAllEncryptionKeys for ' . implode(',', $dataset_names));
+
+            return $keys;
+        }
+    }
+
+    /**
      * Get a key for decryption
      * Will cache if appropriate
      *

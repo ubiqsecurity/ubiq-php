@@ -358,7 +358,7 @@ class Credentials
         ];
         
         foreach ($config_paths as $path) {
-            if (file_exists(realpath($path . 'ubiq-config.json'))) {
+            if (!empty(realpath($path . 'ubiq-config.json')) && file_exists(realpath($path . 'ubiq-config.json'))) {
                 $config = file_get_contents(realpath($path . 'ubiq-config.json'));
 
                 ubiq_debug($this, 'Loading ubiq-config.json at ' . $path);

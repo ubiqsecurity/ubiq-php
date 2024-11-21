@@ -266,18 +266,16 @@ Examples are shown below.
 
 ### Encrypt For Search
 
-TODO
-
 The same plaintext data will result in different cipher text when encrypted using different data keys. The Encrypt For Search function will encrypt the same plain text for a given dataset using all previously used data keys. This will provide a collection of cipher text values that can be used when searching for existing records where the data was encrypted and the specific version of the data key is not known in advance.
 
 ```php
 
 $credentials = new Ubiq\Credentials();
-$dataset_name = 'SSN';
+$dataset_name = 'SSN'; // or SSN,PHONE or ['SSN', 'PHONE']
 
 $plaintext = '123-45-6789';
 
-$ciphertext_array = \Ubiq\encryptForSearch($credentials, $dataset_name, $plaintext)
+$ciphertext_array = \Ubiq\encryptForSearch($credentials, $dataset_names, $plaintext)
 ```
 
 
