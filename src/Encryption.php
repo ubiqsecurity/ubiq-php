@@ -70,7 +70,7 @@ class Encryption
 
         ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' use(s)');
 
-        if ($creds && !empty($key)) {
+        if ($creds && empty($key)) {
             $key = $creds::$keymanager->getEncryptionKey(
                 $creds,
                 $dataset,
