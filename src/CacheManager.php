@@ -62,7 +62,7 @@ class CacheManager
             return false;
         }
 
-        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] > time()) {
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] <= time()) {
             return false;
         }
 
@@ -155,7 +155,7 @@ class CacheManager
             return;
         }
 
-        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] > time()) {
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] <= time()) {
             $return = false;
             
             return;

@@ -49,8 +49,6 @@ class KeyManager
             CacheManager::CACHE_TYPE_KEYS, $dataset->name . '-keys-default'
         );
 
-        // print_r(array_keys($creds::$cachemanager::$caches['keys']));
-        
         if (!empty($cache)) {
             ubiq_debug($creds, 'Found default key of ' . $cache['key_idx'] . ' for ' . $dataset->name);
 
@@ -523,7 +521,7 @@ class KeyManager
             $json = json_decode($resp['content'], true);
 
             $cache = [
-                'key_idx'       => md5($json['key_number']),
+                'key_idx'       => md5(base64_encode($json['key_number'])),
                 '_key_enc'      => NULL,
                 '_key_enc_prv'  => $json['encrypted_private_key'],
                 '_key_raw'      => base64_decode($json['wrapped_data_key']),

@@ -55,7 +55,7 @@
                                 (default: ~/.ubiq/credentials)
     -P PROFILE               Identify the profile within the credentials file
     */
-    $commands = getopt("he:d:n:c:p:s:");
+    $commands = getopt("he:d:n:c:p:s:i:");
     
     if ($commands['h'] ?? FALSE) {
         showHelp();
@@ -65,6 +65,7 @@
     $dataset = $commands['n'] ?? NULL;
     $credentials_file = $commands['c'] ?? NULL;
     $profile_name = $commands['p'] ?? NULL;
+    $iterations = $commands['i'] ?? NULL;
 
     if (empty($dataset)) {
         die('Must specify dataset');
@@ -76,10 +77,10 @@
     }
 
     if (!empty($commands['d'])) {
-        doDecrypt($credentials, $commands['d'], $dataset);
+        doDecrypt($credentials, $commands['d'], $dataset, $iterations);
     }
     elseif (!empty($commands['e'])) {
-        doEncrypt($credentials, $commands['e'], $dataset);
+        doEncrypt($credentials, $commands['e'], $dataset, $iterations);
     }
     elseif (!empty($commands['s'])) {
         doEncryptForSearch($credentials, $commands['s'], $dataset);
@@ -103,6 +104,9 @@
             -n <Dataset>
             Use the supplied dataset name
             
+            -i <iterations>
+            Iterate the action this number of times
+            
             -c <CREDENTIALS>
             Set the file name with the API credentials (default: ~/.ubiq/credentials)
             
@@ -111,16 +115,28 @@
         ";
     }
 
-    function doDecrypt($credentials, $string, $dataset) {
+    function doDecrypt($credentials, $string, $dataset, $iterations = 1) {
         debug('Begin doDecrypt');
-        $value = \Ubiq\decrypt($credentials, $string, $dataset);
+        for ($i = 0; $i < $iterations; $i++) {
+            $value = \Ubiq\decrypt($credentials, $string, $dataset);
+            
+            if ($i % 100 == 0 || $iterations < 20) {
+                debug('Finished doDecrypt iteration ' . ($i+1) . ' of ' . $iterations);
+            }
+        }
         debug('Finished doDecrypt');
         debug('Decrypted ' . $string . ' to ' . $value);
     }
 
-    function doEncrypt($credentials, $string, $dataset) {
+    function doEncrypt($credentials, $string, $dataset, $iterations = 1) {
         debug('Begin doEncrypt');
-        $value = \Ubiq\encrypt($credentials, $string, $dataset);
+        for ($i = 0; $i < $iterations; $i++) {
+            $value = \Ubiq\encrypt($credentials, $string, $dataset);
+    
+            if ($i % 100 == 0 || $iterations < 20) {
+                debug('Finished doEncrypt iteration ' . ($i+1) . ' of ' . $iterations);
+            }
+        }
         debug('Finished doEncrypt');
         debug('Encrypted ' . $string . ' to ' . $value);
     }

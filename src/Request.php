@@ -174,7 +174,7 @@ class Request
      * @param string $ctype   The content type
      * @param bool   $execute Whether or not to execute the curl or return the handle
      *
-     * @return array An associative array containing 'status', 'content_type', and
+     * @return An associative array containing 'status', 'content_type', and
      *         'content' or false
      */
     private function _do(
@@ -183,7 +183,7 @@ class Request
         ?string $content,
         ?string $ctype,
         bool $execute = true
-    ) : array {
+    ) {
         $ret = false;
         $headers = array();
         $response = '';
