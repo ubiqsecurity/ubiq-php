@@ -45,7 +45,7 @@ class Dataset
         $this->name = $dataset_name ?? '';
         $this->group_name = $dataset_group_name ?? '';
         $this->type = $dataset_type;
-        $this->structured_config = $structured_config;
+        $this->setStructuredConfig($structured_config);
     }
     
     /**
@@ -68,5 +68,26 @@ class Dataset
         }
 
         return true;
+    }
+
+    /**
+     * Sets the structured config, including
+     * sorting the passthrough rules
+     *
+     * @param array $config The structured config
+     * 
+     */
+    public function setStructuredConfig(array $config)
+    {
+        $this->structured_config = $config;
+        
+        // sort the passthrough rules by priority
+        if (!empty($this->structured_config['passthrough_rules'])) {
+            usort($this->structured_config['passthrough_rules'], function ($a, $b) {
+                return ($a['priority'] ?? 0 > $b['priority'] ?? 0);
+            });
+        }
+
+        return $this;
     }
 }

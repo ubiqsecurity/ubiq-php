@@ -236,39 +236,13 @@ class Decryption
      */
     public function updateStructured(string $ciphertext) : string
     {
-        $prefix_str = '';
-        $suffix_str = '';
-        $mask_str = '';
-        $decrypt_str = $ciphertext;
-        $passthrough_vals = mb_str_split($this->_dataset->structured_config['passthrough']);
-        $passthrough_chars = array_flip($passthrough_vals);
-
-        foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
-            if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
-                $prefix_str = mb_substr($ciphertext, 0, $action['length']);
-                $decrypt_str = mb_substr($decrypt_str, $action['length']);
-
-                ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $decrypt_str);
-            }
-            if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
-                $suffix_str = mb_substr($ciphertext, -$action['length']);
-                $decrypt_str = mb_substr($decrypt_str, 0, $action['length']);
-
-                ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $decrypt_str);
-            }
-        }
-
-        if (!empty($passthrough_chars)) {
-            $mask_str = $decrypt_str;
-            $decrypt_str = str_replace($passthrough_vals, '', $decrypt_str);
-
-            ubiq_debug($this->_creds, 'Parsing for partial encryption remove passthrough chars to result in ' . $decrypt_str);
-        }
+        $parts = Structured::deconstructFromPartialRules($ciphertext, $this->_creds, $this->_dataset);
+        $string = $parts['string'];
 
         $key = $this->_creds::$keymanager->getDecryptionKey(
             $this->_creds,
             $this->_dataset,
-            ['key_number' => FF1::decodeKeyNumber($decrypt_str, $this->_dataset)]
+            ['key_number' => FF1::decodeKeyNumber($string, $this->_dataset)]
         );
 
         $this->key = $key;
@@ -286,23 +260,10 @@ class Decryption
             $this->_creds::$config['logging']['vverbose'] ?? FALSE
         );
 
-        $plaintext_str = $cipher->decryptToOutput($decrypt_str, $this->_dataset, $this->_key_enc);
-        $formatted_str = '';
-
-        $k = 0;
-        $mask_str_array = mb_str_split($mask_str);
-        $plaintext_str_array = mb_str_split($plaintext_str);
-        for ($i = 0; $i < sizeof($mask_str_array); $i++) {
-            if (!array_key_exists($mask_str_array[$i], $passthrough_chars)) {
-                $formatted_str .= $plaintext_str_array[$k];
-                $k++;
-            }
-            else {
-                $formatted_str .= $mask_str_array[$i];
-            }
-        }
-
-        return $prefix_str . $formatted_str . $suffix_str;
+        $plaintext_str = $cipher->decryptToOutput($string, $this->_dataset, $this->_key_enc);
+        $plaintext_str = Structured::reconstructFromPartialRules($plaintext_str, $parts, $this->_creds, $this->_dataset);
+        
+        return $plaintext_str;
     }
 
     /**
