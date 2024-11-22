@@ -27,6 +27,8 @@ class CacheManager
     const CACHE_TYPE_EVENTS = 'events';
     const CACHE_TYPE_DATASET_CONFIGS = 'dataset_configs';
 
+    public static $cache_counts = []; // indexed by cache type keys
+
     public static $caches = [
         // indexed by datasetname - md5(base64_encode($encrypted_data_key))
         // [
@@ -67,22 +69,6 @@ class CacheManager
         }
 
         return self::$caches[$cache_type][$key] ?? false;
-    }
-
-    /**
-     * Get a cache key count
-     *
-     * @param string $cache_type The cache type to search
-     * 
-     * @return The number of elements in the cache
-     */
-    public static function getsizeof(string $cache_type)
-    {
-        if (!array_key_exists($cache_type, self::$caches)) {
-            return -1;
-        }
-
-        return sizeof(self::$caches[$cache_type]);
     }
 
     /**

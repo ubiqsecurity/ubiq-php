@@ -42,7 +42,7 @@
     Usage: php ubiq_load_test.php -e|-d INPUT -s|-p -n FFS [-c CREDENTIALS] [-P PROFILE]
     Encrypt or decrypt data using the Ubiq structured encryption service
     
-    -p
+    -x
     Print information regarding the failing records.
     
     -e
@@ -70,9 +70,9 @@
     -p <PROFILE>
     Identify the profile within the credentials file (default: default)
     */
-    $commands = getopt("heEdDc:p:s:i:");
+    $commands = getopt("hxe:E:d:D:c:p:s:i:");
     
-    if ($commands['h'] ?? FALSE) {
+    if (array_key_exists('h', $commands)) {
         showHelp();
         exit;
     }
@@ -86,7 +86,7 @@
         $credentials_file = $commands['c'] ?? NULL;
         $profile_name = $commands['p'] ?? NULL;
         $file = $commands['i'] ?? NULL;
-        $print_failures = $commands['p'] ?? FALSE;
+        $print_failures = array_key_exists('x', $commands);
         $max_average_encrypt = $commands['e'] ?? 0;
         $max_total_encrypt = $commands['E'] ?? 0;
         $max_average_decrypt = $commands['d'] ?? 0;
@@ -132,9 +132,9 @@
             foreach ($json as $idx => $row) {
 
                 if ($row['dataset'] == 'UTF8_STRING_COMPLEX') continue;
-                // if ($idx > 25) continue;
+                // if ($idx > 25) break;
 
-                if ($idx % 1000 == 0 || sizeof($json) <= (1000 && $idx % 50 == 0)) {
+                if ($idx % 1000 == 0 || (sizeof($json) <= 1000 && $idx % 50 == 0)) {
                     debug('Processing record ' . $idx . ' of ' . sizeof($json) . ' in ' . $file);
                     if (sizeof($json) < 25) {
                         debug('Dataset: ' . $row['dataset'] . ' plaintext ' . $row['plaintext'] . ' ciphertext ' . $row['ciphertext']);
@@ -255,7 +255,7 @@
             Usage: php ubiq_load_test.php -e|-d INPUT -s|-p -n FFS [-c CREDENTIALS] [-P PROFILE]
             Encrypt or decrypt data using the Ubiq structured encryption service
             
-            -p
+            -x
             Print information regarding the failing records.
             
             -e

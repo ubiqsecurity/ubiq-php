@@ -268,7 +268,7 @@ class Decryption
         $key = $this->_creds::$keymanager->getDecryptionKey(
             $this->_creds,
             $this->_dataset,
-            ['key_number' => FF1::decodeKeyNumber($ciphertext, $this->_dataset)]
+            ['key_number' => FF1::decodeKeyNumber($decrypt_str, $this->_dataset)]
         );
 
         $this->key = $key;
@@ -282,7 +282,8 @@ class Decryption
             $this->_creds,
             $this->_key_raw,
             $this->_dataset->structured_config['tweak'],
-            $this->_dataset->structured_config['input_character_set']
+            $this->_dataset->structured_config['input_character_set'],
+            $this->_creds::$config['logging']['vverbose'] ?? FALSE
         );
 
         $plaintext_str = $cipher->decryptToOutput($decrypt_str, $this->_dataset, $this->_key_enc);
@@ -298,8 +299,6 @@ class Decryption
                 $formatted_str .= $mask_str[$i];
             }
         }
-
-        // ubiq_debugv('final value ' . $prefix_str . $formatted_str . $suffix_str);
 
         return $prefix_str . $formatted_str . $suffix_str;
     }

@@ -55,9 +55,9 @@
                                 (default: ~/.ubiq/credentials)
     -P PROFILE               Identify the profile within the credentials file
     */
-    $commands = getopt("he:d:n:c:p:s:i:");
+    $commands = getopt("rhe:d:n:c:p:s:i:");
     
-    if ($commands['h'] ?? FALSE) {
+    if (array_key_exists('h', $commands)) {
         showHelp();
         exit;
     }
