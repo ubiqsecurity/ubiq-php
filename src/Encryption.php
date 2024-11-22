@@ -226,20 +226,20 @@ class Encryption
         $suffix_str = '';
         $mask_str = '';
         $encrypt_str = $plaintext;
-        $passthrough_vals = str_split($this->_dataset->structured_config['passthrough']);
+        $passthrough_vals = mb_str_split($this->_dataset->structured_config['passthrough']);
         $passthrough_chars = array_flip($passthrough_vals);
-        $input_chars = array_flip(str_split($this->_dataset->structured_config['input_character_set']));
+        $input_chars = array_flip(mb_str_split($this->_dataset->structured_config['input_character_set']));
 
         foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
             if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
-                $prefix_str = substr($plaintext, 0, $action['length']);
-                $encrypt_str = substr($encrypt_str, $action['length']);
+                $prefix_str = mb_substr($plaintext, 0, $action['length']);
+                $encrypt_str = mb_substr($encrypt_str, $action['length']);
 
                 ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $encrypt_str);
             }
             if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
-                $suffix_str = substr($plaintext, -$action['length']);
-                $encrypt_str = substr($encrypt_str, 0, $action['length']);
+                $suffix_str = mb_substr($plaintext, -$action['length']);
+                $encrypt_str = mb_substr($encrypt_str, 0, $action['length']);
 
                 ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $encrypt_str);
             }
@@ -253,17 +253,17 @@ class Encryption
         }
 
         // Validate trimmed input
-        foreach (str_split($encrypt_str) as $char) {
+        foreach (mb_str_split($encrypt_str) as $char) {
             if (!array_key_exists($char, $input_chars)) {
                 throw new \Exception('Invalid character found in the input: ' . $char);
             }
         }
     
-        if (strlen($encrypt_str) < $this->_dataset->structured_config['min_input_length']) {
+        if (mb_strlen($encrypt_str) < $this->_dataset->structured_config['min_input_length']) {
             throw new \Exception('Invalid input length does not meet minimum of ' . $this->_dataset->structured_config['min_input_length']);
         }
     
-        if (strlen($encrypt_str) > $this->_dataset->structured_config['max_input_length']) {
+        if (mb_strlen($encrypt_str) > $this->_dataset->structured_config['max_input_length']) {
             throw new \Exception('Invalid input length exceeds maximum of ' . $this->_dataset->structured_config['max_input_length']);
         }
     
@@ -280,13 +280,15 @@ class Encryption
         $formatted_str = '';
 
         $k = 0;
-        for ($i = 0; $i < strlen($mask_str); $i++) {
-            if (!array_key_exists($mask_str[$i], $passthrough_chars)) {
-                $formatted_str .= $cipher_str[$k];
+        $mask_str_array = mb_str_split($mask_str);
+        $cipher_str_array = mb_str_split($cipher_str);
+        for ($i = 0; $i < sizeof($mask_str_array); $i++) {
+            if (!array_key_exists($mask_str_array[$i], $passthrough_chars)) {
+                $formatted_str .= $cipher_str_array[$k];
                 $k++;
             }
             else {
-                $formatted_str .= $mask_str[$i];
+                $formatted_str .= $mask_str_array[$i];
             }
         }
         

@@ -131,9 +131,6 @@
 
             foreach ($json as $idx => $row) {
 
-                if ($row['dataset'] == 'UTF8_STRING_COMPLEX') continue;
-                // if ($idx > 25) break;
-
                 if ($idx % 1000 == 0 || (sizeof($json) <= 1000 && $idx % 50 == 0)) {
                     debug('Processing record ' . $idx . ' of ' . sizeof($json) . ' in ' . $file);
                     if (sizeof($json) < 25) {

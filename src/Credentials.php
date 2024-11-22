@@ -375,7 +375,7 @@ class Credentials
                         "vverbose": false
                     },
                     "event_reporting": {
-                        "minimum_event_count": 5,
+                        "minimum_event_count": 500,
                         "flush_interval": 2,
                         "trap_exceptions": false,
                         "timestamp_granularity": "SECONDS",

@@ -15,6 +15,9 @@
 #TODO add unit tests for structured encrypt, including min/max lengths and passthru rules
 #TODO add compatibility tests for structured encrypt
 
+#perf TODO
+pre-mb_str_split $dataset->structured_config['output_character_set'] on dataset fetch
+and use that wherever we need to
 
 
 ## 0.1.0 - 6/27/2023

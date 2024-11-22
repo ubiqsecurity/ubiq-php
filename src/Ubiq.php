@@ -57,12 +57,15 @@ function encrypt(
     $dataset = null,
     $multiple_uses = false
 ) {
+    ubiq_debug($credentials, 'Starting encrypt');
 
     $enc = new Encryption($credentials, $dataset, $multiple_uses);
 
     $ct  = $enc->begin();
     $ct .= $enc->update($plaintext);
     $ct .= $enc->end();
+
+    ubiq_debug($credentials, 'Finished encrypt');
 
     return $ct;
 }

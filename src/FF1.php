@@ -83,10 +83,10 @@ class FF1
 
     private static function bigIntegerToString($number, $alphabet, $desired_string_length = FALSE) {
         $result = '';
-        $radix = strlen($alphabet);
+        $radix = mb_strlen($alphabet);
         $big_radix = new BigInteger($radix);
         $cvt = new BigInteger($number);
-        $alphabet_chars = str_split($alphabet);
+        $alphabet_chars = mb_str_split($alphabet);
     
         // Convert the number to the desired base
         while ($cvt->compare(self::$big_zero) > 0) {
@@ -98,13 +98,13 @@ class FF1
     
         if ($desired_string_length !== FALSE) {
             // Check if the length exceeds the desired string length
-            if (strlen($result) > $desired_string_length) {
+            if (mb_strlen($result) > $desired_string_length) {
                 throw new \Exception("Unable to convert big integer into {$desired_string_length} characters");
             }
         
             // Pad the string with leading "zero characters" to reach the desired size
-            if (strlen($result) < $desired_string_length) {
-                $padding = str_repeat($alphabet_chars[0], $desired_string_length - strlen($result));
+            if (mb_strlen($result) < $desired_string_length) {
+                $padding = str_repeat($alphabet_chars[0], $desired_string_length - mb_strlen($result));
                 $result = $padding . $result;
             }
         }
@@ -113,15 +113,16 @@ class FF1
     }
 
     private static function stringToBigInteger($number_string, $alphabet) : BigInteger {
-        $radix = strlen($alphabet);
+        $radix = mb_strlen($alphabet);
         $number = new BigInteger(0);
         $digit = new BigInteger(1);
         $big_radix = new BigInteger($radix);
-        $alphabet_array = array_flip(str_split($alphabet));
-    
+        $alphabet_array = array_flip(mb_str_split($alphabet));
+        $number_string_array = mb_str_split($number_string);
+
         // Iterate over the string in reverse order
-        for ($i = strlen($number_string) - 1; $i >= 0; $i--) {
-            $character = $number_string[$i];
+        for ($i = sizeof($number_string_array) - 1; $i >= 0; $i--) {
+            $character = $number_string_array[$i];
             $alphabet_idx = $alphabet_array[$character] ?? false;
             if ($alphabet_idx === false) {
                 throw new \Exception("Invalid character in number string: " . $character . ' in alphabet ' . $alphabet);
@@ -158,11 +159,12 @@ class FF1
         // convert to a big number in the output charset radix
         $text = self::stringToBigInteger($text, $dataset->structured_config['output_character_set']);
         ubiq_debug(self::$_creds, 'converted stringToBigInteger');
-
+        self::$verbose && ubiq_debug('text to input ' . $text->toString());
 
         // convert to a big number string in the input charset radix
-        $text = self::bigIntegerToString($text, $dataset->structured_config['input_character_set'], strlen($ciphertext));
+        $text = self::bigIntegerToString($text, $dataset->structured_config['input_character_set'], mb_strlen($ciphertext));
         ubiq_debug(self::$_creds, 'converted bigIntegerToString');
+        self::$verbose && ubiq_debug('text to output ' . $text);
 
         $text = $this->decrypt($text);
         ubiq_debug(self::$_creds, 'Finished decryptToOutput for ' . $ciphertext . ' to ' . $text);
@@ -172,20 +174,27 @@ class FF1
     
     public function encryptToOutput($text, Dataset $dataset, $key_number)
     {
+        ubiq_debug(self::$_creds, 'Starting encryptToOutput for ' . $text);
+
         // encrypt
         $ciphertext = $this->encrypt($text);
-        ubiq_debug(self::$_creds, 'Plaintext ' . $text . ' to ciphertext ' . $ciphertext);
+        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext);
 
         // convert to a big number in the input charset radix
         $ciphertext = self::stringToBigInteger($ciphertext, $dataset->structured_config['input_character_set']);
-        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext->toString());
+        ubiq_debug(self::$_creds, 'converted stringToBigInteger');
+        self::$verbose && ubiq_debug('ciphertext to input ' . $ciphertext->toString());
 
         // convert that to a bignumber string in the output radix
-        $ciphertext = self::bigIntegerToString($ciphertext, $dataset->structured_config['output_character_set'], strlen($text));
-        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext);
+        $ciphertext = self::bigIntegerToString($ciphertext, $dataset->structured_config['output_character_set'], mb_strlen($text));
+        ubiq_debug(self::$_creds, 'converted bigIntegerToString');
+        self::$verbose && ubiq_debug('ciphertext to output ' . $ciphertext);
 
         $ciphertext = self::encodeKeyNumber($ciphertext, $dataset, $key_number);
-        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext);
+        ubiq_debug(self::$_creds, 'encodeKeyNumber');
+        self::$verbose && ubiq_debug('ciphertext with key number ' . $ciphertext);
+
+        ubiq_debug(self::$_creds, 'Finished encryptToOutput for ' . $text . ' to ' . $ciphertext);
 
         return $ciphertext;
     }
@@ -194,10 +203,13 @@ class FF1
     {
         self::$verbose && ubiq_debug('decodeKeyNumber from ' . $text . ' for dataset ' . $dataset->name);
         // Get the first character from the text
-        $char_buf = $text[0];
+        $text_array = mb_str_split($text);
+        $output_char_set_array = mb_str_split($dataset->structured_config['output_character_set']);
+        
+        $char_buf = $text_array[0];
 
         // Find the index of the character in the dataset's OutputCharacters
-        $encoded_value = strpos($dataset->structured_config['output_character_set'], $char_buf);
+        $encoded_value = mb_strpos($dataset->structured_config['output_character_set'], $char_buf);
         self::$verbose && ubiq_debug('char_buf ' . $char_buf);
         
         // Calculate the ct_val
@@ -207,10 +219,10 @@ class FF1
 
         if ($return_text) {
             $encoded_value -= $key_number << (int)$dataset->structured_config['msb_encoding_bits'];
-            $ch = $dataset->structured_config['output_character_set'][$encoded_value];
+            $ch = $output_char_set_array[$encoded_value];
 
-            $decoded_text = $text;
-            $decoded_text[0] = $ch;
+            $text_array[0] = $ch;
+            $decoded_text = implode("", $text_array);
 
             ubiq_debug(self::$_creds, 'Replaced decoded key number ' . $key_number . ' from ' . $text . ' to ' . $decoded_text);
 
@@ -223,11 +235,12 @@ class FF1
     public static function encodeKeyNumber($text, Dataset $dataset, $key_number)
     {
         // Get the first character from the text
-        $char_buf = $text[0];
+        $text_array = mb_str_split($text);
+        $output_char_set_array = mb_str_split($dataset->structured_config['output_character_set']);
+        $char_buf = $text_array[0];
 
         // Find the index of the character in the dataset's OutputCharacters
-        $ct_val = strpos($dataset->structured_config['output_character_set'], $char_buf);
-        self::$verbose && ubiq_debug('output_character_set ' . $dataset->structured_config['output_character_set']);
+        $ct_val = mb_strpos($dataset->structured_config['output_character_set'], $char_buf);
         self::$verbose && ubiq_debug('char_buf ' . $char_buf);
         self::$verbose && ubiq_debug('ct_val ' . $ct_val);
 
@@ -236,12 +249,12 @@ class FF1
         self::$verbose && ubiq_debug('ct_val ' . $ct_val);
 
         // Get the character from OutputCharacters at the ct_val index
-        $ch = $dataset->structured_config['output_character_set'][$ct_val];
+        $ch = $output_char_set_array[$ct_val];
         self::$verbose && ubiq_debug('ch ' . $ch);
 
         // Replace the character in the text
-        $encoded_text = $text;
-        $encoded_text[0] = $ch;
+        $text_array[0] = $ch;
+        $encoded_text = implode("", $text_array);
 
         ubiq_debug(self::$_creds, 'Encoded key number ' . $key_number . ' in ' . $text . ' as ' . $encoded_text);
 
@@ -257,7 +270,7 @@ class FF1
         self::$big_zero = new BigInteger(0);
 
         if (!empty($alphabet)) {
-            $radix = strlen($alphabet);
+            $radix = mb_strlen($alphabet);
         }
 
         $this->key = $key;
@@ -268,7 +281,7 @@ class FF1
         // FF1 and FF3-1 support a radix up to 65536, but the
         // implementation becomes increasingly difficult and
         // less useful in practice after the limits below.
-        if ($radix < 2 || $radix > strlen($alphabet))
+        if ($radix < 2 || $radix > mb_strlen($alphabet))
         {
             throw new \Exception('Invalid radix length');
         }
@@ -379,7 +392,7 @@ class FF1
         $tweak = array_values(unpack('C*', base64_decode($tweak)));
         $big_radix = new BigInteger($radix);
 
-        $n = strlen($x);
+        $n = mb_strlen($x);
         $u = floor($n / 2);
         $v = $n - $u;
         
@@ -422,11 +435,11 @@ class FF1
         
         // Step 2
         if ($encrypt) {
-            $A = substr($x, 0, $u);
-            $B = substr($x, $u);
+            $A = mb_substr($x, 0, $u);
+            $B = mb_substr($x, $u);
         } else {
-            $B = substr($x, 0, $u);
-            $A = substr($x, $u);
+            $B = mb_substr($x, 0, $u);
+            $A = mb_substr($x, $u);
         }
         self::$verbose && ubiq_debug('A ' . $A);
         self::$verbose && ubiq_debug('B ' . $B);
@@ -474,7 +487,7 @@ class FF1
     
             // Step 6i, the non-static parts
             $PQ[sizeof($PQ) - $b - 1] = ($encrypt ? $i : (9 - $i)) & 0xFF;
-            self::$verbose && ubiq_debug('PQ ' . (sizeof($PQ) - $b - 1) . ' ' . (($encrypt ? $i : (9 - $i)) & 0xFF));
+            self::$verbose && ubiq_debug('PQ ' . (sizeof($PQ) - $b - 1) . ' ' . $PQ[sizeof($PQ) - $b - 1]);
     
             // convert numeral string B to an integer
             // export that integer as a byte array in to q
