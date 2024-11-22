@@ -222,48 +222,23 @@ class Encryption
     public function updateStructured(
         $plaintext
     ) : string {
-        $prefix_str = '';
-        $suffix_str = '';
-        $mask_str = '';
-        $encrypt_str = $plaintext;
-        $passthrough_vals = mb_str_split($this->_dataset->structured_config['passthrough']);
-        $passthrough_chars = array_flip($passthrough_vals);
         $input_chars = array_flip(mb_str_split($this->_dataset->structured_config['input_character_set']));
 
-        foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
-            if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
-                $prefix_str = mb_substr($plaintext, 0, $action['length']);
-                $encrypt_str = mb_substr($encrypt_str, $action['length']);
-
-                ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $encrypt_str);
-            }
-            if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
-                $suffix_str = mb_substr($plaintext, -$action['length']);
-                $encrypt_str = mb_substr($encrypt_str, 0, $action['length']);
-
-                ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $encrypt_str);
-            }
-        }
-
-        if (!empty($passthrough_chars)) {
-            $mask_str = $encrypt_str;
-            $encrypt_str = str_replace($passthrough_vals, '', $encrypt_str);
-
-            ubiq_debug($this->_creds, 'Parsing for partial encryption remove passthrough chars to result in ' . $encrypt_str);
-        }
+        $parts = Structured::deconstructFromPartialRules($plaintext, $this->_creds, $this->_dataset);
+        $string = $parts['string'];
 
         // Validate trimmed input
-        foreach (mb_str_split($encrypt_str) as $char) {
+        foreach (mb_str_split($string) as $char) {
             if (!array_key_exists($char, $input_chars)) {
                 throw new \Exception('Invalid character found in the input: ' . $char);
             }
         }
     
-        if (mb_strlen($encrypt_str) < $this->_dataset->structured_config['min_input_length']) {
+        if (mb_strlen($string) < $this->_dataset->structured_config['min_input_length']) {
             throw new \Exception('Invalid input length does not meet minimum of ' . $this->_dataset->structured_config['min_input_length']);
         }
     
-        if (mb_strlen($encrypt_str) > $this->_dataset->structured_config['max_input_length']) {
+        if (mb_strlen($string) > $this->_dataset->structured_config['max_input_length']) {
             throw new \Exception('Invalid input length exceeds maximum of ' . $this->_dataset->structured_config['max_input_length']);
         }
     
@@ -275,26 +250,10 @@ class Encryption
             $this->_creds::$config['logging']['vverbose'] ?? FALSE
         );
 
-        $cipher_str = $cipher->encryptToOutput($encrypt_str, $this->_dataset, $this->_key_enc);
+        $cipher_str = $cipher->encryptToOutput($string, $this->_dataset, $this->_key_enc);
+        $cipher_str = Structured::reconstructFromPartialRules($cipher_str, $parts, $this->_creds, $this->_dataset);
 
-        $formatted_str = '';
-
-        $k = 0;
-        $mask_str_array = mb_str_split($mask_str);
-        $cipher_str_array = mb_str_split($cipher_str);
-        for ($i = 0; $i < sizeof($mask_str_array); $i++) {
-            if (!array_key_exists($mask_str_array[$i], $passthrough_chars)) {
-                $formatted_str .= $cipher_str_array[$k];
-                $k++;
-            }
-            else {
-                $formatted_str .= $mask_str_array[$i];
-            }
-        }
-        
-        // ubiq_debugv('final value ' . $prefix_str . $formatted_str . $suffix_str);
-
-        return $prefix_str . $formatted_str . $suffix_str;
+        return $cipher_str;
     }
 
     /**

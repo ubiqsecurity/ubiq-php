@@ -120,8 +120,8 @@ class DatasetManager
 
             return;
         }
-        
-        $dataset->structured_config = json_decode($resp['content'], true);
+        $dataset->setStructuredConfig(json_decode($resp['content'], true));
+
         $dataset->type = DatasetManager::DATASET_TYPE_STRUCTURED;
 
         return $dataset;
