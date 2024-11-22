@@ -84,7 +84,7 @@ class Dataset
         // sort the passthrough rules by priority
         if (!empty($this->structured_config['passthrough_rules'])) {
             usort($this->structured_config['passthrough_rules'], function ($a, $b) {
-                return ($a['priority'] ?? 0 > $b['priority'] ?? 0);
+                return (intval($a['priority'] ?? 0) > intval($b['priority'] ?? 0));
             });
         }
 
