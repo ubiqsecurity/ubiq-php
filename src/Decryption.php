@@ -240,19 +240,19 @@ class Decryption
         $suffix_str = '';
         $mask_str = '';
         $decrypt_str = $ciphertext;
-        $passthrough_vals = str_split($this->_dataset->structured_config['passthrough']);
+        $passthrough_vals = mb_str_split($this->_dataset->structured_config['passthrough']);
         $passthrough_chars = array_flip($passthrough_vals);
 
         foreach ($this->_dataset->structured_config['passthrough_rules'] as $action) {
             if ($action === Structured::ENCRYPTION_RULE_TYPE_PREFIX) {
-                $prefix_str = substr($ciphertext, 0, $action['length']);
-                $decrypt_str = substr($decrypt_str, $action['length']);
+                $prefix_str = mb_substr($ciphertext, 0, $action['length']);
+                $decrypt_str = mb_substr($decrypt_str, $action['length']);
 
                 ubiq_debug($this->_creds, 'Parsing for partial encryption prefix ' . $prefix_str . ' and remainder ' . $decrypt_str);
             }
             if ($action === Structured::ENCRYPTION_RULE_TYPE_SUFFIX) {
-                $suffix_str = substr($ciphertext, -$action['length']);
-                $decrypt_str = substr($decrypt_str, 0, $action['length']);
+                $suffix_str = mb_substr($ciphertext, -$action['length']);
+                $decrypt_str = mb_substr($decrypt_str, 0, $action['length']);
 
                 ubiq_debug($this->_creds, 'Parsing for partial encryption suffix ' . $prefix_str . ' and remainder ' . $decrypt_str);
             }
@@ -290,13 +290,15 @@ class Decryption
         $formatted_str = '';
 
         $k = 0;
-        for ($i = 0; $i < strlen($mask_str); $i++) {
-            if (!array_key_exists($mask_str[$i], $passthrough_chars)) {
-                $formatted_str .= $plaintext_str[$k];
+        $mask_str_array = mb_str_split($mask_str);
+        $plaintext_str_array = mb_str_split($plaintext_str);
+        for ($i = 0; $i < sizeof($mask_str_array); $i++) {
+            if (!array_key_exists($mask_str_array[$i], $passthrough_chars)) {
+                $formatted_str .= $plaintext_str_array[$k];
                 $k++;
             }
             else {
-                $formatted_str .= $mask_str[$i];
+                $formatted_str .= $mask_str_array[$i];
             }
         }
 
