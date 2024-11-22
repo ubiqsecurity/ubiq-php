@@ -65,7 +65,7 @@
     $dataset = $commands['n'] ?? NULL;
     $credentials_file = $commands['c'] ?? NULL;
     $profile_name = $commands['p'] ?? NULL;
-    $iterations = $commands['i'] ?? NULL;
+    $iterations = $commands['i'] ?? 1;
 
     if (empty($dataset)) {
         die('Must specify dataset');
@@ -123,9 +123,10 @@
             if ($i % 100 == 0 || $iterations < 20) {
                 debug('Finished doDecrypt iteration ' . ($i+1) . ' of ' . $iterations);
             }
+
+            debug('Decrypted ' . $string . ' to ' . $value);
         }
         debug('Finished doDecrypt');
-        debug('Decrypted ' . $string . ' to ' . $value);
     }
 
     function doEncrypt($credentials, $string, $dataset, $iterations = 1) {
@@ -136,15 +137,16 @@
             if ($i % 100 == 0 || $iterations < 20) {
                 debug('Finished doEncrypt iteration ' . ($i+1) . ' of ' . $iterations);
             }
+            
+            debug('Encrypted ' . $string . ' to ' . $value);
         }
         debug('Finished doEncrypt');
-        debug('Encrypted ' . $string . ' to ' . $value);
     }
 
     function doEncryptForSearch($credentials, $string, $dataset) {
         debug('Begin doEncryptForSearch');
         $values = \Ubiq\encryptForSearch($credentials, $string, $dataset);
-        debug('Finished encrydoEncryptForSearchption');
+        debug('Finished doEncryptForSearchption');
         debug('Encrypted ' . $string . ' to ');
         print_R($values);
     }
