@@ -96,11 +96,11 @@
         $times = []; // [dataset][encrypt|decrypt|count]
         $totals = ['encrypt' => 0, 'decrypt' => 0, 'count' => 0];
         $errors = [];
-        
+
         if (empty($file)) {
             die('Must specify infile');
         }
-    
+
         if (file_exists($file)) {
             if (is_file($file)) {
                 $files[] = $file;
@@ -110,8 +110,14 @@
                         $files[] = realpath($file . DIRECTORY_SEPARATOR . $_file);
                     }
                 }
-            } else {
-                die('Infile ' . $file . ' is not a valid file or directory');
+            }
+        } elseif (is_dir(dirname($file))) {
+            foreach (scandir(dirname($file)) as $_file) {
+                if ($_file !== '.' && $_file !== '..') {
+                    if (strpos($_file, str_replace('*', '', basename($file))) === 0) {
+                        $files[] = realpath(dirname($file) . DIRECTORY_SEPARATOR . $_file);
+                    }
+                }
             }
         } else {
             die('Infile ' . $file . ' does not exist');
