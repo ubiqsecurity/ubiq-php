@@ -193,7 +193,7 @@
                 debug("\tTotal: record_count: " . $totals['count'] . ", Average: " . round($totals['encrypt'] / $totals['count']) . ", total " . $row['encrypt']);
 
                 debug('Decrypt records count ' . $totals['count'] . '. Times in microseconds');
-                foreach ($times as $row) {
+                foreach ($times as $dataset => $row) {
                     if ($row['count'] == 0) continue;
                     debug("\tDataset: " . $dataset . ", record_count: " . $row['count'] . ", Average: " . round($row['decrypt'] / $row['count']) . ", total " . $row['encrypt']);
                 }
