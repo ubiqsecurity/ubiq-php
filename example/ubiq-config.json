@@ -1,6 +1,7 @@
 {
     "logging": {
-        "verbose": true
+        "verbose": false,
+        "vverbose": false
     },
     "event_reporting": {
         "minimum_count": 5,

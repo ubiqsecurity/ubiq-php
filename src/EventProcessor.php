@@ -121,6 +121,7 @@ class EventProcessor
     private static ?string $_last_reported = null;
     private static bool $_processing = false;
     private static ?string $user_metadata = null;
+    private static int $_event_count_queued = 0;
 
     const EVENT_TYPE_ENCRYPT = 'encrypted';
     const EVENT_TYPE_DECRYPT = 'decrypt';
@@ -165,6 +166,10 @@ class EventProcessor
             self::$_creds::$cachemanager::set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
         }
 
+        self::$_event_count_queued++;
+
+        ubiq_debug(self::$_creds, 'Total event count incremented to '. self::$_event_count_queued);
+
         if (empty(self::$_last_reported)) {
             self::$_last_reported = time();
         }
@@ -197,14 +202,14 @@ class EventProcessor
         }
         ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds::$config['event_reporting']['flush_interval']);
 
-        if (self::$_creds::$cachemanager::getsizeof(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds::$config['event_reporting']['minimum_count']
+        if (self::$_event_count_queued > self::$_creds::$config['event_reporting']['minimum_count']
         ) {
-            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_creds::$cachemanager::getsizeof(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
+            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_event_count_queued . ' exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
 
             return true;
         }
 
-        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_creds::$cachemanager::getsizeof(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
+        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_event_count_queued . ' has not exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
 
         return false;
     }
@@ -359,5 +364,6 @@ class EventProcessor
 
         self::$_last_reported = time();
         self::$_processing = false;
+        self::$_event_count_queued = 0;
     }
 }

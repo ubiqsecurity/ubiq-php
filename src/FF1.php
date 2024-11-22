@@ -38,9 +38,9 @@ class FF1
     public $twkmax = 0;
     public $alphabet = null;
     public $key = null;
+    public static $verbose = false;
 
     private static ?BigInteger $big_zero = null;
-    private static ?BigInteger $big_one = null;
     
     private static ?Credentials $_creds = null;
 
@@ -150,19 +150,22 @@ class FF1
 
     public function decryptToOutput($ciphertext, Dataset $dataset, $key_number)
     {
+        ubiq_debug(self::$_creds, 'Starting decryptToOutput for ' . $ciphertext);
+
         $text = self::decodeKeyNumber($ciphertext, $dataset, TRUE);
-        // ubiq_debugv('text ' . $text);
+        self::$verbose && ubiq_debug('text ' . $text);
 
         // convert to a big number in the output charset radix
         $text = self::stringToBigInteger($text, $dataset->structured_config['output_character_set']);
-        // ubiq_debugv('text ' . $text->toString());
+        ubiq_debug(self::$_creds, 'converted stringToBigInteger');
+
 
         // convert to a big number string in the input charset radix
         $text = self::bigIntegerToString($text, $dataset->structured_config['input_character_set'], strlen($ciphertext));
-        // ubiq_debugv('text ' . $text);
+        ubiq_debug(self::$_creds, 'converted bigIntegerToString');
 
         $text = $this->decrypt($text);
-        ubiq_debug(self::$_creds, 'Structured decrypt ciphertext ' . $ciphertext . ' to plaintext ' . $text);
+        ubiq_debug(self::$_creds, 'Finished decryptToOutput for ' . $ciphertext . ' to ' . $text);
 
         return $text;
     }
@@ -175,27 +178,27 @@ class FF1
 
         // convert to a big number in the input charset radix
         $ciphertext = self::stringToBigInteger($ciphertext, $dataset->structured_config['input_character_set']);
-        // ubiq_debugv('ciphertext ' . $ciphertext->toString());
+        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext->toString());
 
         // convert that to a bignumber string in the output radix
         $ciphertext = self::bigIntegerToString($ciphertext, $dataset->structured_config['output_character_set'], strlen($text));
-        // ubiq_debugv('ciphertext ' . $ciphertext);
+        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext);
 
         $ciphertext = self::encodeKeyNumber($ciphertext, $dataset, $key_number);
-        // ubiq_debugv('ciphertext ' . $ciphertext);
+        self::$verbose && ubiq_debug('ciphertext ' . $ciphertext);
 
         return $ciphertext;
     }
 
     public static function decodeKeyNumber($text, Dataset $dataset, $return_text = FALSE)
     {
+        self::$verbose && ubiq_debug('decodeKeyNumber from ' . $text . ' for dataset ' . $dataset->name);
         // Get the first character from the text
         $char_buf = $text[0];
 
         // Find the index of the character in the dataset's OutputCharacters
         $encoded_value = strpos($dataset->structured_config['output_character_set'], $char_buf);
-        // ubiq_debugv('output_character_set ' . $dataset->structured_config['output_character_set']);
-        // ubiq_debugv('char_buf ' . $char_buf);
+        self::$verbose && ubiq_debug('char_buf ' . $char_buf);
         
         // Calculate the ct_val
         $key_number = $encoded_value >> (int)$dataset->structured_config['msb_encoding_bits'];
@@ -209,7 +212,7 @@ class FF1
             $decoded_text = $text;
             $decoded_text[0] = $ch;
 
-            ubiq_debug(self::$_creds, 'Structured decoded key number ' . $key_number . ' from ' . $text . ' as ' . $decoded_text);
+            ubiq_debug(self::$_creds, 'Replaced decoded key number ' . $key_number . ' from ' . $text . ' to ' . $decoded_text);
 
             return $decoded_text;
         }
@@ -224,17 +227,17 @@ class FF1
 
         // Find the index of the character in the dataset's OutputCharacters
         $ct_val = strpos($dataset->structured_config['output_character_set'], $char_buf);
-        // ubiq_debugv('output_character_set ' . $dataset->structured_config['output_character_set']);
-        // ubiq_debugv('char_buf ' . $char_buf);
-        // ubiq_debugv('ct_val ' . $ct_val);
+        self::$verbose && ubiq_debug('output_character_set ' . $dataset->structured_config['output_character_set']);
+        self::$verbose && ubiq_debug('char_buf ' . $char_buf);
+        self::$verbose && ubiq_debug('ct_val ' . $ct_val);
 
         // Calculate the ct_val
         $ct_val += $key_number << (int)$dataset->structured_config['msb_encoding_bits'];
-        // ubiq_debugv('ct_val ' . $ct_val);
+        self::$verbose && ubiq_debug('ct_val ' . $ct_val);
 
         // Get the character from OutputCharacters at the ct_val index
         $ch = $dataset->structured_config['output_character_set'][$ct_val];
-        // ubiq_debugv('ch ' . $ch);
+        self::$verbose && ubiq_debug('ch ' . $ch);
 
         // Replace the character in the text
         $encoded_text = $text;
@@ -245,15 +248,18 @@ class FF1
         return $encoded_text;
     }
 
-    public function __construct(Credentials $creds, $key, $tweak, $alphabet) {
-        self::$big_one = new BigInteger(1);
+    public function __construct(Credentials $creds, $key, $tweak, $alphabet, $verbose = false) {
+        self::$_creds = $creds;
+        self::$verbose = $verbose;
+        
+        ubiq_debug(self::$_creds, 'Starting FF1:_construct');
+
         self::$big_zero = new BigInteger(0);
 
         if (!empty($alphabet)) {
             $radix = strlen($alphabet);
         }
-        self::$_creds = $creds;
-        
+
         $this->key = $key;
         $this->tweak = $tweak;
         $this->radix = $radix;
@@ -276,6 +282,7 @@ class FF1
         if ($txtmin < 2 || $txtmin > $this->txtmax) {
             throw new \Exception('Minimum text length out of range');
         }
+        ubiq_debug(self::$_creds, 'Finished FF1:_construct');
     }
 
 
@@ -285,13 +292,13 @@ class FF1
         $iv = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
                
-        // ubiq_debugv('iv ' .  implode(',', $iv));
+        self::$verbose && ubiq_debug('iv ' .  implode(',', $iv));
         // $iv = implode("", array_map("chr", $iv)); // make sure this is outside the loop
             
         $key = array_values(unpack('C*', $this->key));
-        // ubiq_debugv('key ' .  implode(',', $key));
-        // ubiq_debugv('src ' .  implode(',', $src));
-        // ubiq_debugv('dest ' .  implode(',', $dest));
+        self::$verbose && ubiq_debug('key ' .  implode(',', $key));
+        self::$verbose && ubiq_debug('src ' .  implode(',', $src));
+        self::$verbose && ubiq_debug('dest ' .  implode(',', $dest));
 
         // OpenSSL encryption using AES-128-CBC with no padding
         $src_length = sizeof($src) - $src_offset;
@@ -303,18 +310,18 @@ class FF1
         $aes->disablePadding();
         $aes->enableContinuousBuffer();
 
-        // ubiq_debugv('getEngine ' .  $aes->getEngine());
+        self::$verbose && ubiq_debug('getEngine ' .  $aes->getEngine());
 
         for ($i = 0; $i < $length && $i < $src_length; $i += self::BLOCK_SIZE) {
             // Pad src_part to match the block size of self::BLOCK_SIZE bytes if necessary
             $src_part = array_slice($src, $i + $src_offset, self::BLOCK_SIZE);
             $src_part = self::padToBlockSize($src_part, self::BLOCK_SIZE);
 
-            // ubiq_debugv('src_part ' .  implode(',', $src_part));
+            self::$verbose && ubiq_debug('src_part ' .  implode(',', $src_part));
 
             $encrypted = $aes->encrypt(implode("", array_map("chr", $src_part)));
             
-            // ubiq_debugv('encrypted phpseclib ' .  implode(',', array_values(unpack('C*', $encrypted))));
+            self::$verbose && ubiq_debug('encrypted phpseclib ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
             // if using openssl, the IV for subsequent encryption rounds
             // is the encrypted byte array from the previous round
@@ -330,13 +337,13 @@ class FF1
             //     $iv,
             // );
             // $iv = $encrypted;
-            // // ubiq_debugv('encrypted openssl ' .  implode(',', array_values(unpack('C*', $encrypted))));
+            // self::$verbose && ubiq_debug('encrypted openssl ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
             if (!empty(openssl_error_string())) {
                 ubiq_debug(self::$_creds, 'Structured encrypted OpenSSL error ' . openssl_error_string());
             }
         }
-        // ubiq_debugv('final encrypted ' .  implode(',', array_values(unpack('C*', $encrypted))));
+        self::$verbose && ubiq_debug('final encrypted ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
         $encrypted_arr = array_values(unpack('C*', $encrypted));
 
@@ -376,9 +383,9 @@ class FF1
         $u = floor($n / 2);
         $v = $n - $u;
         
-        // ubiq_debugv('x ' . $x);
-        // ubiq_debugv('n ' . $n);
-        // ubiq_debugv('u ' . $u);
+        self::$verbose && ubiq_debug('x ' . $x);
+        self::$verbose && ubiq_debug('n ' . $n);
+        self::$verbose && ubiq_debug('u ' . $u);
     
         // Step 3, 4
         $a = intval(ceil((log($radix) / log(2)) * $v)) + 7;
@@ -387,7 +394,7 @@ class FF1
     
         $p = 16;
         $r = intval(($d + 15) / 16) * 16;
-        // ubiq_debugv('r ' . $r);
+        self::$verbose && ubiq_debug('r ' . $r);
     
         $A = "";
         $B = "";
@@ -404,14 +411,14 @@ class FF1
 
         // The number of bytes in q
         $q = intval((sizeof($tweak) + $b + 1 + 15) / 16) * 16;
-        // ubiq_debugv('sizeof($tweak) ' . sizeof($tweak));
-        // ubiq_debugv('q ' . $q);
+        self::$verbose && ubiq_debug('sizeof($tweak) ' . sizeof($tweak));
+        self::$verbose && ubiq_debug('q ' . $q);
         
         // P and Q need to be adjacent in memory for encryption
         $PQ = array_fill(0, $p + $q, 0);
         $R = array_fill(0, $r, 0);
     
-        // ubiq_debugv('R ' . implode(',', $R));
+        self::$verbose && ubiq_debug('R ' . implode(',', $R));
         
         // Step 2
         if ($encrypt) {
@@ -421,8 +428,8 @@ class FF1
             $B = substr($x, 0, $u);
             $A = substr($x, $u);
         }
-        // ubiq_debugv('A ' . $A);
-        // ubiq_debugv('B ' . $B);
+        self::$verbose && ubiq_debug('A ' . $A);
+        self::$verbose && ubiq_debug('B ' . $B);
         
     
         // Step 5
@@ -445,7 +452,7 @@ class FF1
     
         array_splice($PQ, $p, sizeof($tweak), $tweak);
 
-        // ubiq_debugv('PQ ' . implode(',', $PQ));
+        self::$verbose && ubiq_debug('PQ ' . implode(',', $PQ));
 
         // Step 6i, the static parts
         
@@ -454,56 +461,56 @@ class FF1
         for ($i = 0; $i < 10; $i++) {
             // Step 6v
             $m = (($i + ($encrypt ? 1 : 0)) % 2 == 1) ? $u : $v;
-            // ubiq_debugv('i ' . $i);
-            // ubiq_debugv('m ' . $m);
+            self::$verbose && ubiq_debug('i ' . $i);
+            self::$verbose && ubiq_debug('m ' . $m);
     
             $big_radix_pow_m = $big_radix->pow(new BigInteger($m));
 
             $c = 0;
             $y = 0;
             $numb = [];
-            // ubiq_debugv('b ' . $b);
-            // ubiq_debugv('sizeof($PQ) ' . sizeof($PQ));
+            self::$verbose && ubiq_debug('b ' . $b);
+            self::$verbose && ubiq_debug('sizeof($PQ) ' . sizeof($PQ));
     
             // Step 6i, the non-static parts
             $PQ[sizeof($PQ) - $b - 1] = ($encrypt ? $i : (9 - $i)) & 0xFF;
-            // ubiq_debugv('PQ ' . (sizeof($PQ) - $b - 1) . ' ' . (($encrypt ? $i : (9 - $i)) & 0xFF));
+            self::$verbose && ubiq_debug('PQ ' . (sizeof($PQ) - $b - 1) . ' ' . (($encrypt ? $i : (9 - $i)) & 0xFF));
     
             // convert numeral string B to an integer
             // export that integer as a byte array in to q
             $c = self::stringToBigInteger($B, $alphabet);
-            // ubiq_debugv('c ' . $c->toString());
+            self::$verbose && ubiq_debug('c ' . $c->toString());
 
             // assume this is big-endian order because it came from the string
             $numb = array_values(unpack('C*', $c->toBytes()));
-            // ubiq_debugv('numb ' . implode(',', $numb));
+            self::$verbose && ubiq_debug('numb ' . implode(',', $numb));
     
             if ($numb[0] == 0 && sizeof($numb) > 1) {
                 // Remove the extra byte if it exists
                 array_shift($numb);
             }
             
-            // ubiq_debugv('sizeof($numb) ' . sizeof($numb));
+            self::$verbose && ubiq_debug('sizeof($numb) ' . sizeof($numb));
 
             // Left pad with zeros
             if ($b > sizeof($numb)) {
-                // ubiq_debugv('adding zeros');
+                self::$verbose && ubiq_debug('adding zeros');
                 $numb = self::padToBlockSize($numb, $b, 0);
             }
             array_splice($PQ, sizeof($PQ) - $b, $b, array_slice($numb, 0, $b));
-            // ubiq_debugv('PQ ' . implode(',', $PQ));
+            self::$verbose && ubiq_debug('PQ ' . implode(',', $PQ));
 
             // Step 6ii - perform encryption
             self::prf($PQ, 0, $R, 0, sizeof($PQ));
     
             // Step 6iii - fill subsequent blocks
             // with the result of ciph(R ^ 1), ciph(R ^ 2), ...
-            // ubiq_debugv('intval($r / 16) ' . intval($r / 16));
+            self::$verbose && ubiq_debug('intval($r / 16) ' . intval($r / 16));
             
             for ($j = 1; $j < intval($r / 16); $j++) {
                 $l = $j * 16;
 
-                // ubiq_debugv('l ' . $l);
+                self::$verbose && ubiq_debug('l ' . $l);
 
                 $R[$l + 0] = 0;
                 $R[$l + 1] = 0;
@@ -526,31 +533,31 @@ class FF1
     
                 self::prf($R, $l, $R, $l);
             }
-            // ubiq_debugv('R ' . implode(',', $R));
+            self::$verbose && ubiq_debug('R ' . implode(',', $R));
     
             // Step 6vi
             // calculate A +/- y mod radix**m
             // where y is the number formed by the first d bytes of R
             // create an integer from the first @d bytes in @R
             $c = self::stringToBigInteger($A, $alphabet);
-            // ubiq_debugv('c ' . $c->toString());
-            // ubiq_debugv('A ' . $A);
-            // ubiq_debugv('d ' . $d);
+            self::$verbose && ubiq_debug('c ' . $c->toString());
+            self::$verbose && ubiq_debug('A ' . $A);
+            self::$verbose && ubiq_debug('d ' . $d);
 
             $yA = array_slice($R, 0, $d);
-            // ubiq_debugv('yA ' . implode(',', $yA));
+            self::$verbose && ubiq_debug('yA ' . implode(',', $yA));
             $y = self::bytesToBigInteger($yA);
-            // ubiq_debugv('y ' . $y->toString());
+            self::$verbose && ubiq_debug('y ' . $y->toString());
             $y = self::modBigIntegers($y, $big_radix_pow_m);
-            // ubiq_debugv('y ' . $y->toString());
+            self::$verbose && ubiq_debug('y ' . $y->toString());
 
             // Step 6vii
             if ($encrypt) {
-                // ubiq_debugv('c adding for encrypt ' . $y->toString() . ' ' . $c->toString());
+                self::$verbose && ubiq_debug('c adding for encrypt ' . $y->toString() . ' ' . $c->toString());
                 $c = $c->add($y);
             } else {
                 $c = $c->subtract($y);
-                // ubiq_debugv('c subtracting for decrypt ' . $y->toString() . ' ' . $c->toString());
+                self::$verbose && ubiq_debug('c subtracting for decrypt ' . $y->toString() . ' ' . $c->toString());
             }
 
             $c = self::modBigIntegers($c, $big_radix_pow_m);
@@ -558,10 +565,10 @@ class FF1
             // as noted in the nodeJS library
             // the algorithm appears to need a number between 0 and the dominator,
             // this if statement prevents result to be negative.
-            // ubiq_debugv('c is negative ' . $c->isNegative() . ' ' . $c->toString());
+            self::$verbose && ubiq_debug('c is negative ' . $c->isNegative() . ' ' . $c->toString());
             if ($c->isNegative()) {
-                // ubiq_debugv('c less than zero, adding ' . $c->toString() . ' + ' . $big_radix_pow_m->toString());
-                // ubiq_debugv('$c->add($big_radix_pow_m) ' . $c->add($big_radix_pow_m)->toSTring());
+                self::$verbose && ubiq_debug('c less than zero, adding ' . $c->toString() . ' + ' . $big_radix_pow_m->toString());
+                self::$verbose && ubiq_debug('$c->add($big_radix_pow_m) ' . $c->add($big_radix_pow_m)->toSTring());
                 $c = $c->add($big_radix_pow_m);
             }
             
@@ -572,14 +579,14 @@ class FF1
             // Step 6ix
             $B = $C;
 
-            // ubiq_debugv('c ' . $c->toString());
-            // ubiq_debugv('A ' . $A);
-            // ubiq_debugv('B ' . $B);
-            // ubiq_debugv('C ' . $C);
+            self::$verbose && ubiq_debug('c ' . $c->toString());
+            self::$verbose && ubiq_debug('A ' . $A);
+            self::$verbose && ubiq_debug('B ' . $B);
+            self::$verbose && ubiq_debug('C ' . $C);
         }
     
         // Step 7
-        // ubiq_debugv('final answer ' . ($encrypt ? ($A . $B) : ($B . $A)));
+        self::$verbose && ubiq_debug('final answer ' . ($encrypt ? ($A . $B) : ($B . $A)));
         return $encrypt ? ($A . $B) : ($B . $A);
     }
 

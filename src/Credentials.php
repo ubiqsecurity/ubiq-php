@@ -371,7 +371,8 @@ class Credentials
             $config = json_decode('
                 {
                     "logging": {
-                        "verbose": false
+                        "verbose": false,
+                        "vverbose": false
                     },
                     "event_reporting": {
                         "minimum_event_count": 5,

@@ -78,11 +78,15 @@ function encrypt(
  */
 function decrypt(Credentials $credentials, string $ciphertext, $dataset = null)
 {
+    ubiq_debug($credentials, 'Starting decrypt');
+
     $dec = new Decryption($credentials, $dataset);
 
     $pt  = $dec->begin();
     $pt .= $dec->update($ciphertext);
     $pt .= $dec->end();
+
+    ubiq_debug($credentials, 'Finished decrypt');
 
     return $pt;
 }
@@ -125,34 +129,22 @@ function encryptForSearch(
 /**
  * Debug output
  *
- * @param object $credentials The credentials object
+ * @param var    $credentials The credentials object or a $message
  * @param string $message     Debug
  *
  * @return None
  */
 // @codingStandardsIgnoreLine
-function ubiq_debug(?Credentials $creds, string $msg)
+function ubiq_debug($creds, string $msg = NULL)
 {
-    if (!empty($creds)
+    if (is_string($creds)) {
+        echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $creds . PHP_EOL;
+    }
+    elseif (
+        !empty($creds)
         && !empty($creds::$config)
         && ($creds::$config['logging']['verbose'] ?? false)
     ) {
-        echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
-    }
-}
-
-/**
- * Debug output
- *
- * @param object $credentials The credentials object
- * @param string $message     Debug
- *
- * @return None
- */
-// @codingStandardsIgnoreLine
-function ubiq_debugv(string $msg)
-{
-    if (FALSE) {
         echo (new \DateTime())->format('Y-m-d H:i:s.v ') . $msg . PHP_EOL;
     }
 }

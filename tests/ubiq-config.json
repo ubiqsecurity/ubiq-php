@@ -1,10 +1,11 @@
 {
     "logging": {
-        "verbose": false
+        "verbose": false,
+        "vverbose": false
     },
     "event_reporting": {
-        "minimum_count": 5,
-        "flush_interval": 2,
+        "minimum_count": 5000,
+        "flush_interval": 30,
         "trap_exceptions": false,
         "timestamp_granularity": "SECONDS",
         "destroy_report_async": false

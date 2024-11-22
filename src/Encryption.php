@@ -271,7 +271,8 @@ class Encryption
             $this->_creds,
             $this->_key_raw,
             $this->_dataset->structured_config['tweak'],
-            $this->_dataset->structured_config['input_character_set']
+            $this->_dataset->structured_config['input_character_set'],
+            $this->_creds::$config['logging']['vverbose'] ?? FALSE
         );
 
         $cipher_str = $cipher->encryptToOutput($encrypt_str, $this->_dataset, $this->_key_enc);
