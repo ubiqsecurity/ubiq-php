@@ -244,7 +244,11 @@ Additional information on how to use these models in your own applications is av
 ### Custom Metadata for Usage Reporting
 There are cases where a developer would like to attach metadata to usage information reported by the application.  Both the structured and unstructured interfaces allow user_defined metadata to be sent with the usage information reported by the libraries.
 
-The **add_reporting_user_defined_metadata** function accepts a string in JSON format that will be stored in the database with the usage records.  The string must be less than 1024 characters and be a valid JSON format.  The string must include both the `{` and `}` symbols.  The supplied value will be used until the object goes out of scope.  Due to asynchronous processing, changing the value may be immediately reflected in subsequent usage.
+The **addReportingUserDefinedMetadata** function accepts a string in JSON format that will be stored in the database with the usage records.  The string must be less than 1024 characters and be a valid JSON format.  The string must include both the `{` and `}` symbols.  The supplied value will be used until the object goes out of scope.  Due to asynchronous processing, changing the value may be immediately reflected in subsequent usage.
+
+The **clearReportingUserDefinedMetadata** function can be used to remove metadata that will be reported on subsequent event reporting calls.
+
+Metadata is added at the time the events are reported.  If your event reporting configuration allows for queuing of events, be aware of managing the events in the queue vs. the metadata that will be added when the queue is flushed.
 
 Examples are shown below.
 ```php
