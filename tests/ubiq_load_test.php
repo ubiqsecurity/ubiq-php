@@ -182,74 +182,73 @@
                     $totals['count'] ++;
                 }
             }
-
-            
-            if ($totals['count'] > 0) {
-                debug('Encrypt records count ' . $totals['count'] . '. Times in microseconds');
-                foreach ($times as $dataset => $row) {
-                    if ($row['count'] == 0) continue;
-                    debug("\tDataset: " . $dataset . ", record_count: " . $row['count'] . ", Average: " . round($row['encrypt'] / $row['count']) . ", total " . $row['encrypt']);
-                }
-                debug("\tTotal: record_count: " . $totals['count'] . ", Average: " . round($totals['encrypt'] / $totals['count']) . ", total " . $row['encrypt']);
-
-                debug('Decrypt records count ' . $totals['count'] . '. Times in microseconds');
-                foreach ($times as $dataset => $row) {
-                    if ($row['count'] == 0) continue;
-                    debug("\tDataset: " . $dataset . ", record_count: " . $row['count'] . ", Average: " . round($row['decrypt'] / $row['count']) . ", total " . $row['encrypt']);
-                }
-                debug("\tTotal: record_count: " . $totals['count'] . ", Average: " . round($totals['decrypt'] / $totals['count']) . ", total " . $row['encrypt']);
-
-                if ($max_average_encrypt > 0 && $totals['encrypt'] / $totals['count'] > $max_average_encrypt) {
-                    debug('FAILED: Exceeded maximum allowed average encrypt threshold of ' . $max_average_encrypt . ' microseconds');
-                }
-                elseif ($max_average_encrypt > 0) {
-                    debug('PASSED: Maximum allowed average encrypt threshold of ' . $max_average_encrypt . ' microseconds');
-                }
-
-                if ($max_average_encrypt > 0 && $totals['decrypt'] / $totals['count']) {
-                    debug('FAILED: Exceeded maximum allowed average decrypt threshold of ' . $max_average_decrypt . ' microseconds');
-                }
-                elseif ($max_average_decrypt > 0) {
-                    debug('PASSED: Maximum allowed average decrypt threshold of ' . $max_average_decrypt . ' microseconds');
-                }
-
-                if ($max_total_encrypt > 0 && $totals['encrypt']) {
-                    debug('FAILED: Exceeded maximum allowed encrypt threshold of ' . $max_total_encrypt . ' microseconds');
-                }
-                elseif ($max_total_encrypt > 0) {
-                    debug('PASSED: Maximum allowed encrypt threshold of ' . $max_total_encrypt . ' microseconds');
-                }
-
-                if ($max_total_decrypt > 0 && $totals['decrypt']) {
-                    debug('FAILED: Exceeded maximum allowed decrypt threshold of ' . $max_total_decrypt . ' microseconds');
-                }
-                elseif ($max_total_encrypt > 0) {
-                    debug('PASSED: Maximum allowed decrypt threshold of ' . $max_total_decrypt . ' microseconds');
-                }
-            }
-
-            if (empty($errors)) {
-                debug('PASSED: ' . $totals['count'] . ' records validated');
-            }
-            else {
-                debug('FAILED: ' . sizeof($errors) . ' records failed');
-                
-                if ($print_failures) {
-                    foreach ($errors as $row) {
-                        $string = "\tIdx: " . $row['idx'] . " Dataset: " . $row['dataset'];
-                        if ($row['expected_ciphertext'] != $row['actual_ciphertext']) {
-                            $string .= " encrypt of " . $row['expected_plaintext'] . " should be " . $row['expected_ciphertext'] . " vs " . $row['actual_ciphertext'];
-                        }
-                        if ($row['expected_plaintext'] != $row['actual_plaintext']) {
-                            $string .= " decrypt of " . $row['expected_ciphertext'] . " should be " . $row['expected_plaintext'] . " vs " . $row['actual_plaintext'];
-                        }
-                        debug($string);
-                    }
-                }
-            }
-            
-            debug('Finished doTests');
         }
+
+        if ($totals['count'] > 0) {
+            debug('Encrypt records count ' . $totals['count'] . '. Times in microseconds');
+            foreach ($times as $dataset => $row) {
+                if ($row['count'] == 0) continue;
+                debug("\tDataset: " . $dataset . ", record_count: " . $row['count'] . ", Average: " . round($row['encrypt'] / $row['count']) . ", total " . $row['encrypt']);
+            }
+            debug("\tTotal: record_count: " . $totals['count'] . ", Average: " . round($totals['encrypt'] / $totals['count']) . ", total " . $row['encrypt']);
+
+            debug('Decrypt records count ' . $totals['count'] . '. Times in microseconds');
+            foreach ($times as $dataset => $row) {
+                if ($row['count'] == 0) continue;
+                debug("\tDataset: " . $dataset . ", record_count: " . $row['count'] . ", Average: " . round($row['decrypt'] / $row['count']) . ", total " . $row['encrypt']);
+            }
+            debug("\tTotal: record_count: " . $totals['count'] . ", Average: " . round($totals['decrypt'] / $totals['count']) . ", total " . $row['encrypt']);
+
+            if ($max_average_encrypt > 0 && $totals['encrypt'] / $totals['count'] > $max_average_encrypt) {
+                debug('FAILED: Exceeded maximum allowed average encrypt threshold of ' . $max_average_encrypt . ' microseconds');
+            }
+            elseif ($max_average_encrypt > 0) {
+                debug('PASSED: Maximum allowed average encrypt threshold of ' . $max_average_encrypt . ' microseconds');
+            }
+
+            if ($max_average_encrypt > 0 && $totals['decrypt'] / $totals['count']) {
+                debug('FAILED: Exceeded maximum allowed average decrypt threshold of ' . $max_average_decrypt . ' microseconds');
+            }
+            elseif ($max_average_decrypt > 0) {
+                debug('PASSED: Maximum allowed average decrypt threshold of ' . $max_average_decrypt . ' microseconds');
+            }
+
+            if ($max_total_encrypt > 0 && $totals['encrypt']) {
+                debug('FAILED: Exceeded maximum allowed encrypt threshold of ' . $max_total_encrypt . ' microseconds');
+            }
+            elseif ($max_total_encrypt > 0) {
+                debug('PASSED: Maximum allowed encrypt threshold of ' . $max_total_encrypt . ' microseconds');
+            }
+
+            if ($max_total_decrypt > 0 && $totals['decrypt']) {
+                debug('FAILED: Exceeded maximum allowed decrypt threshold of ' . $max_total_decrypt . ' microseconds');
+            }
+            elseif ($max_total_encrypt > 0) {
+                debug('PASSED: Maximum allowed decrypt threshold of ' . $max_total_decrypt . ' microseconds');
+            }
+        }
+
+        if (empty($errors)) {
+            debug('PASSED: ' . $totals['count'] . ' records validated');
+        }
+        else {
+            debug('FAILED: ' . sizeof($errors) . ' records failed');
+            
+            if ($print_failures) {
+                foreach ($errors as $row) {
+                    $string = "\tIdx: " . $row['idx'] . " Dataset: " . $row['dataset'];
+                    if ($row['expected_ciphertext'] != $row['actual_ciphertext']) {
+                        $string .= " encrypt of " . $row['expected_plaintext'] . " should be " . $row['expected_ciphertext'] . " vs " . $row['actual_ciphertext'];
+                    }
+                    if ($row['expected_plaintext'] != $row['actual_plaintext']) {
+                        $string .= " decrypt of " . $row['expected_ciphertext'] . " should be " . $row['expected_plaintext'] . " vs " . $row['actual_plaintext'];
+                    }
+                    debug($string);
+                }
+            }
+        }
+        
+        debug('Finished doTests');
     }
 
 

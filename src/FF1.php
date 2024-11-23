@@ -498,7 +498,7 @@ class FF1
             $numb = array_values(unpack('C*', $c->toBytes()));
             self::$verbose && ubiq_debug('numb ' . implode(',', $numb));
     
-            if ($numb[0] == 0 && sizeof($numb) > 1) {
+            if (array_key_exists(0, $numb) && $numb[0] == 0 && sizeof($numb) > 1) {
                 // Remove the extra byte if it exists
                 array_shift($numb);
             }

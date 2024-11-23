@@ -27,12 +27,8 @@ class Decryption
 {
     private $_key_raw;
     private $_key_enc;
-    private $_session;
-    private $_fingerprint;
     private $_algorithm;
-    private $_fragment;
 
-    private $key = null;
     private ?Dataset $_dataset = null;
     private ?Credentials $_creds = null;
 
@@ -51,13 +47,12 @@ class Decryption
         Credentials $creds = null,
         $dataset = null
     ) {
-        $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
-
         $this->_creds = $creds;
-        $this->_dataset = $dataset;
 
         if ($creds) {
             $this->_reset();
+            $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
+            $this->_dataset = $dataset;
         }
     }
 
@@ -193,11 +188,8 @@ class Decryption
             $header
         );
 
-        $this->$key = $key;
         $this->_key_enc = $key['_key_enc'] ?? null;
         $this->_key_raw = $key['_key_raw'] ?? null;
-        $this->_session = $key['_session'] ?? null;
-        $this->_fingerprint = $key['_fingerprint'] ?? null;
         $this->_algorithm = $key['_algorithm'] ?? null;
         $this->_iv = $header['iv'];
 
@@ -245,11 +237,8 @@ class Decryption
             ['key_number' => FF1::decodeKeyNumber($string, $this->_dataset)]
         );
 
-        $this->key = $key;
         $this->_key_enc = $key['_key_enc'] ?? null;
         $this->_key_raw = $key['_key_raw'] ?? null;
-        $this->_session = $key['_session'] ?? null;
-        $this->_fingerprint = $key['_fingerprint'] ?? null;
         $this->_algorithm = $key['_algorithm'] ?? null;
 
         $cipher = new FF1(
@@ -302,10 +291,7 @@ class Decryption
 
         $this->_key_raw     = null;
         $this->_key_enc     = null;
-        $this->_session     = null;
-        $this->_fingerprint = null;
         $this->_algorithm   = null;
-        $this->_fragment    = null;
     }
 
     /**

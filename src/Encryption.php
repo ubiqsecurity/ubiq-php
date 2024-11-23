@@ -28,12 +28,8 @@ class Encryption
 
     private $_key_raw;
     private $_key_enc;
-    private $_session;
-    private $_fingerprint;
     private $_algorithm;
-    private $_fragment;
 
-    private $key = null;
     private ?Dataset $_dataset = null;
     private ?Credentials $_creds = null;
 
@@ -66,9 +62,10 @@ class Encryption
         $multiple_uses = false,
         $key = NULL
     ) {
-        $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
 
-        ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' use(s)');
+        if ($creds) {
+            $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
+        }
 
         if ($creds && empty($key)) {
             $key = $creds::$keymanager->getEncryptionKey(
@@ -78,15 +75,13 @@ class Encryption
             );
         }
 
-        $this->key = $key;
-        $this->_key_enc = $key['_key_enc'] ?? null;
-        $this->_key_raw = $key['_key_raw'] ?? null;
-        $this->_session = $key['_session'] ?? null;
-        $this->_fingerprint = $key['_fingerprint'] ?? null;
-        $this->_algorithm = $key['_algorithm'] ?? null;
-        $this->_fragment = $key['_fragment'] ?? null;
-        $this->_dataset = $dataset;
-        $this->_creds = $creds;
+        if (!empty($key)) {
+            $this->_key_enc = $key['_key_enc'] ?? null;
+            $this->_key_raw = $key['_key_raw'] ?? null;
+            $this->_algorithm = $key['_algorithm'] ?? null;
+            $this->_dataset = $dataset;
+            $this->_creds = $creds;
+        }
     }
 
 
