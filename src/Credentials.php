@@ -127,7 +127,20 @@ class Credentials
      */
     public static function addReportingUserDefinedMetadata(string $user_data)
     {
+        if (!is_string($user_data)) {
+            throw new \Exception('addReportingUserDefinedMetadata only accepts string values');
+        }
         self::$eventprocessor::addUserDefinedMetadata($user_data);
+    }
+
+    /**
+     * Clears metadata that will be reported events
+     *
+     * @return None
+     */
+    public static function clearReportingUserDefinedMetadata()
+    {
+        self::$eventprocessor::clearUserDefinedMetadata();
     }
 
     /**
