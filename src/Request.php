@@ -25,8 +25,8 @@ namespace Ubiq;
  */
 class Request
 {
-    private string $_papi;
-    private string $_sapi;
+    private $_papi;
+    private $_sapi;
     private \CurlHandle $_curl;
 
     /**

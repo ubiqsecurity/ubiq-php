@@ -54,12 +54,16 @@ class CacheManager
      * Get a cache key
      *
      * @param string $cache_type The cache type to search
-     * @param string $key        The cache key to retrieve
+     * @param var $key        The cache key to retrieve
      * 
      * @return Var of the cache or FALSE if not found
      */
-    public static function get(string $cache_type, string $key)
+    public static function get(string $cache_type, $key)
     {
+        if (empty($key)) {
+            return false;
+        }
+        
         if (!array_key_exists($cache_type, self::$caches)) {
             return false;
         }
