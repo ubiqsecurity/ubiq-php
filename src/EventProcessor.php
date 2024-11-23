@@ -222,25 +222,32 @@ class EventProcessor
      * @return None
      */
     public static function addUserDefinedMetadata(string $user_data) {
-        $user_data = json_decode($user_data, TRUE);
-        
-        if (empty($user_data)) {
-            throw new \Exception('User defined metadata must not be null and must be valid JSON');
-
-            return false;
-        }
-        
         if (strlen($user_data) > 1024) {
             throw new \Exception('User defined metadata cannot be longer than 1024 characters');
 
             return false;
         }
         
-        $user_data = json_decode($user_data);
+        $json = json_decode($user_data, TRUE);
+        
+        if (empty($json)) {
+            throw new \Exception('User defined metadata must not be null and must be valid JSON');
 
+            return false;
+        }
+        
         ubiq_debug(self::$_creds, 'Setting user defined metadata to ' . $user_data);
 
         self::$user_metadata = $user_data;
+    }
+
+    /**
+     * Clears user metadata to send with events
+     *
+     * @return None
+     */
+    public static function clearUserDefinedMetadata() {
+        self::$user_metadata = null;
     }
 
     /**
@@ -257,10 +264,11 @@ class EventProcessor
             case "HOURS":
                 return date('c', round($timestamp/60/60)*60*60);
             case "HALF_DAYS":
-                $dt = date('c', round($timestamp/60/60/24)*60*60*24);
+                $ts = round($timestamp/60/60/24)*60*60*24;
                 if (date('H', $timestamp) > 12) {
-                    $dt += 60*60*12;
+                    $ts += 60*60*12;
                 }
+                $dt = date('c', $ts);
                 return $dt;
             case "DAYS":
                 return date('c', round($timestamp/60/60/24)*60*60*24);
@@ -313,7 +321,7 @@ class EventProcessor
 
             // set time stamp granularity
             $event['first_call_timestamp'] = self::formatTimestamp($cached_event->first_call_timestamp);
-            $event['last_call_timestamp'] = (new \DateTime())->setTimestamp($cached_event->last_call_timestamp)->format('c');
+            $event['last_call_timestamp'] = self::formatTimestamp($cached_event->last_call_timestamp);
     
             $events[] = $event;
         }

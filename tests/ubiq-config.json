@@ -4,8 +4,8 @@
         "vverbose": false
     },
     "event_reporting": {
-        "minimum_count": 5000,
-        "flush_interval": 30,
+        "minimum_count": 50000,
+        "flush_interval": 300,
         "trap_exceptions": false,
         "timestamp_granularity": "SECONDS",
         "destroy_report_async": false
