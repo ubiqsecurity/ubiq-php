@@ -27,6 +27,7 @@ class Algorithm
 {
     const AES_256_GCM = 0;
     const AES_128_GCM = 1;
+    const FF1 = 2;
 
     public $id, $name;
     public $keylen, $ivlen, $taglen;
@@ -74,6 +75,9 @@ class Algorithm
             );
             Algorithm::_add(
                 $algos, Algorithm::AES_128_GCM, 'aes-128-gcm', 16, 12, 16
+            );
+            Algorithm::_add(
+                $algos, Algorithm::FF1, 'ff1', 16, 12, 16
             );
 
             if (!array_key_exists($ident, $algos)) {

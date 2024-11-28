@@ -1,0 +1,19 @@
+{
+    "logging": {
+        "verbose": false,
+        "vverbose": false
+    },
+    "event_reporting": {
+        "minimum_count": 50000,
+        "flush_interval": 300,
+        "trap_exceptions": false,
+        "timestamp_granularity": "SECONDS",
+        "destroy_report_async": false
+    },
+    "key_caching" : {
+        "unstructured": true,
+        "structured": true,
+        "encrypt": false,
+        "ttl_seconds" : 1800
+    }
+}

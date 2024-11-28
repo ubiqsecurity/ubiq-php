@@ -26,6 +26,7 @@ class Dataset
     public $name;
     public $group_name;
     public $type;
+    public $structured_config;
 
     /**
      * Create a dataset
@@ -37,18 +38,14 @@ class Dataset
      */
     public function __construct(
         ?string $dataset_name,
-        ?string $dataset_group_name = null
+        ?string $dataset_group_name = null,
+        ?string $dataset_type = null,
+        ?array $structured_config = []
     ) {
-        if (empty($dataset_name)) {
-            $this->name = '';
-            $this->type = DATASET_TYPE_UNSTRUCTURED;
-        } else {
-            $this->name = $dataset_name;
-            $this->type = DATASET_TYPE_UNSTRUCTURED;
-        }
-
+        $this->name = $dataset_name ?? '';
         $this->group_name = $dataset_group_name ?? '';
-
+        $this->type = $dataset_type;
+        $this->setStructuredConfig($structured_config);
     }
     
     /**
@@ -66,10 +63,31 @@ class Dataset
         if (!is_object($o)) {
             return false;
         }
-        if (get_class($o) != 'Dataset') {
+        if (get_class($o) != 'Dataset' && get_class($o) != 'Ubiq\\Dataset') {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * Sets the structured config, including
+     * sorting the passthrough rules
+     *
+     * @param array $config The structured config
+     * 
+     */
+    public function setStructuredConfig(array $config)
+    {
+        $this->structured_config = $config;
+        
+        // sort the passthrough rules by priority
+        if (!empty($this->structured_config['passthrough_rules'])) {
+            usort($this->structured_config['passthrough_rules'], function ($a, $b) {
+                return (intval($a['priority'] ?? 0) > intval($b['priority'] ?? 0));
+            });
+        }
+
+        return $this;
     }
 }
