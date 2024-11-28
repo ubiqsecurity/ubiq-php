@@ -24,7 +24,6 @@ error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE | E_STRICT);
  * @license  https://opensource.org/licenses/MIT MIT
  * @link     https://gitlab.com/ubiqsecurity/ubiq-php
  *
- * @covers Ubiq\_Credentials
  * @covers Ubiq\Credentials
  */
 final class CredentialsTest extends TestCase
