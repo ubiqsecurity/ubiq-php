@@ -56,50 +56,62 @@ class CredentialsConfig
  */
 class Credentials
 {
-    private /*CredentialsConfig*/ $_creds = null;
+    private static ?CredentialsConfig $_credentials_parts = null;
 
-    public static $keymanager = null;
-    public static $cachemanager = null;
-    public static $eventprocessor = null;
+    public static ?KeyManager $keymanager = null;
+    public static ?DatasetManager $datasetmanager = null;
+    public static ?CacheManager $cachemanager = null;
+    public static ?EventProcessor $eventprocessor = null;
+    public static array $config = [];
+
+    /**
+     * Checks for valid credentials
+     *
+     * @return bool Whether or not these credentials are valid
+     */
+    public function viable() : bool
+    {
+        return $this::$_credentials_parts->viable();
+    }
 
     /**
      * Getter for Papi
      *
-     * @return Papi
+     * @return string Papi
      */
     public function getPapi() : string
     {
-        return $this->_creds->papi;
+        return $this::$_credentials_parts->papi;
     }
 
     /**
      * Getter for Sapi
      *
-     * @return Sapi
+     * @return string Sapi
      */
     public function getSapi() : string
     {
-        return $this->_creds->sapi;
+        return $this::$_credentials_parts->sapi;
     }
 
     /**
      * Getter for Srsa
      *
-     * @return Srsa
+     * @return string Srsa
      */
     public function getSrsa() : string
     {
-        return $this->_creds->srsa;
+        return $this::$_credentials_parts->srsa;
     }
 
     /**
      * Getter for host
      *
-     * @return Host
+     * @return string Host
      */
     public function getHost() : string
     {
-        return $this->_creds->host;
+        return $this::$_credentials_parts->host;
     }
 
     /**
@@ -107,7 +119,7 @@ class Credentials
      *
      * @param string $name The name of the environment variable
      *
-     * @return Value of the variable or null
+     * @return string Value of the variable or null
      */
     private static function _getenv(string $name)
         : ?string
@@ -117,9 +129,34 @@ class Credentials
     }
 
     /**
+     * Adds metadata to reported events that can be used for attribution/tagging when events are retrieved
+     *
+     * @param string $user_data A valid JSON string less than 1024 characters
+     * 
+     * @return None
+     */
+    public static function addReportingUserDefinedMetadata(string $user_data)
+    {
+        if (!is_string($user_data)) {
+            throw new \Exception('addReportingUserDefinedMetadata only accepts string values');
+        }
+        self::$eventprocessor::addUserDefinedMetadata($user_data);
+    }
+
+    /**
+     * Clears metadata that will be reported events
+     *
+     * @return None
+     */
+    public static function clearReportingUserDefinedMetadata()
+    {
+        self::$eventprocessor::clearUserDefinedMetadata();
+    }
+
+    /**
      * Get the default path of the credentials file
      *
-     * @return A string containing the path to the credentials file
+     * @return string A string containing the path to the credentials file
      */
     public static function getDefaultFileName()
         : ?string
@@ -130,7 +167,7 @@ class Credentials
     /**
      * Populate properties from the environment
      *
-     * @return Credentials in an "anonymous" object
+     * @return CredentialsConfig in an "anonymous" object
      */
     private static function _loadEnvironment()
         : CredentialsConfig
@@ -151,7 +188,7 @@ class Credentials
      * @param string $filename The path to the credentials file
      * @param string $profname The name of the profile in the credentials
      *
-     * @return Credentials in an "anonymous" object
+     * @return CredentialsConfig in an "anonymous" object
      */
     private static function _loadFile(string $filename, string $profname)
         : CredentialsConfig
@@ -189,7 +226,7 @@ class Credentials
      * @param CredentialsConfig $a The first set of credentials
      * @param CredentialsConfig $b The second set of credentials
      *
-     * @return A merged set of CredentialsConfig
+     * @return CredentialsConfig A merged set of CredentialsConfig
      */
     private static function _merge(CredentialsConfig $a, CredentialsConfig $b)
         : CredentialsConfig
@@ -218,7 +255,7 @@ class Credentials
      * @param CredentialsConfig $creds    A set of credentials to merge with
      * @param string            $filename The path to the credentials file
      *
-     * @return The merged credentials
+     * @return CredentialsConfig The merged credentials
      */
     private static function _mergeWithDefault(
         CredentialsConfig $creds,
@@ -241,8 +278,8 @@ class Credentials
     public function complete()
         : bool
     {
-        return $this->_creds &&
-            $this->_creds->viable() && $this->_creds->host;
+        return $this::$_credentials_parts &&
+            $this::$_credentials_parts->viable() && $this::$_credentials_parts->host;
     }
 
     /**
@@ -259,23 +296,23 @@ class Credentials
         string $papi, string $sapi, string $srsa,
         ?string $host = null
     ) : bool {
-        $creds = new CredentialsConfig();
+        $config = new CredentialsConfig();
 
-        $creds->papi = $papi;
-        $creds->sapi = $sapi;
-        $creds->srsa = $srsa;
-        $creds->host = $host;
+        $config->papi = $papi;
+        $config->sapi = $sapi;
+        $config->srsa = $srsa;
+        $config->host = $host;
 
-        if ($creds->viable()) {
-            if (!$creds->host) {
-                $creds->host = 'https://api.ubiqsecurity.com';
-            } else if (substr($creds->host, 0, 7) !== 'http://'
-                && substr($creds->host, 0, 8) !== 'https://'
+        if ($config->viable()) {
+            if (!$config->host) {
+                $config->host = 'https://api.ubiqsecurity.com';
+            } else if (substr($config->host, 0, 7) !== 'http://'
+                && substr($config->host, 0, 8) !== 'https://'
             ) {
-                $creds->host = 'https://' . $creds->host;
+                $config->host = 'https://' . $config->host;
             }
 
-            $this->_creds = $creds;
+            $this::$_credentials_parts = $config;
         }
 
         return $this->complete();
@@ -304,6 +341,7 @@ class Credentials
         );
 
         $res = $creds->viable();
+        
         if ($res) {
             $res = $this->set(
                 $creds->papi,
@@ -312,7 +350,7 @@ class Credentials
                 $creds->host
             );
         }
-
+        
         return $res;
     }
 
@@ -320,7 +358,7 @@ class Credentials
      * Construct credentials from the environment. Missing components
      * will be loaded from "default" profile in ~/.ubiq/credentials
      */
-    public function __construct()
+    public function __construct($config_file = null)
     {
         $creds = Credentials::_mergeWithDefault(
             Credentials::_loadEnvironment(),
@@ -343,36 +381,53 @@ class Credentials
             __DIR__ . '/',
         ];
         
-        foreach ($config_paths as $path) {
-            if (file_exists(realpath($path . 'ubiq-config.json'))) {
-                $config = file_get_contents(realpath($path . 'ubiq-config.json'));
+        if (!empty($config_file)) {
+            $config = file_get_contents(realpath($config_file));
 
-                ubiq_debug($this, 'Loading ubiq-config.json at ' . $path);
+            ubiq_debug($this, 'Loading ubiq-config.json at ' . $config_file);
+        }
+        else {
+            foreach ($config_paths as $path) {
+                if (!empty(realpath($path . 'ubiq-config.json')) && file_exists(realpath($path . 'ubiq-config.json'))) {
+                    $config = file_get_contents(realpath($path . 'ubiq-config.json'));
 
-                break;
+                    ubiq_debug($this, 'Loading ubiq-config.json at ' . $path);
+
+                    break;
+                }
             }
         }
 
-        if (empty($config)) {
-            $creds->config = [
-                'debug' => false,
-                'event_reporting' => [
-                    'minimum_event_count' => 5,
-                    'flush_interval' => 2,
-                    'destroy_report_async' => false
-                ],
-                'key_caching' => [
-                    'unstructured'  => false,
-                    'encrypt'       => false,
-                ]
-            ];
-        } else {
-            $this->config = json_decode($config, true);
+        if (!empty($config)) {
+            $config = json_decode($config, true);
+        }
+        else {
+            $config = [];
         }
 
+        $config['logging'] = $config['logging'] ?? [];
+        $config['logging']['verbose'] = $config['logging']['verbose'] ?? false;
+        $config['logging']['vverbose'] = $config['logging']['vverbose'] ?? false;
+        $config['logging']['vvverbose'] = $config['logging']['vvverbose'] ?? false;
+
+        $config['event_reporting'] = $config['event_reporting'] ?? [];
+        $config['event_reporting']['minimum_count'] = $config['event_reporting']['minimum_count'] ?? 500;
+        $config['event_reporting']['flush_interval'] = $config['event_reporting']['flush_interval'] ?? 2;
+        $config['event_reporting']['trap_exceptions'] = $config['event_reporting']['trap_exceptions'] ?? false;
+        $config['event_reporting']['timestamp_granularity'] = $config['event_reporting']['timestamp_granularity'] ?? "SECONDS";
+        $config['event_reporting']['destroy_report_async'] = $config['event_reporting']['destroy_report_async'] ?? false;
+
+        $config['key_caching'] = $config['key_caching'] ?? [];
+        $config['key_caching']['unstructured'] = $config['event_reporting']['unstructured'] ?? true;
+        $config['key_caching']['structured'] = $config['event_reporting']['structured'] ?? true;
+        $config['key_caching']['encrypt'] = $config['event_reporting']['encrypt'] ?? false;
+        $config['key_caching']['ttl_seconds'] = $config['event_reporting']['ttl_seconds'] ?? 1800;
+
         self::$keymanager = new \Ubiq\KeyManager();
+        self::$datasetmanager = new \Ubiq\DatasetManager();
         self::$cachemanager = new \Ubiq\CacheManager();
         self::$eventprocessor = new \Ubiq\EventProcessor($this);
+        self::$config = $config;
     }
 
     /**

@@ -25,7 +25,8 @@ namespace Ubiq;
  */
 class Request
 {
-    private $_papi, $_sapi;
+    private $_papi;
+    private $_sapi;
     private $_curl;
 
     /**
@@ -173,7 +174,7 @@ class Request
      * @param string $ctype   The content type
      * @param bool   $execute Whether or not to execute the curl or return the handle
      *
-     * @return An associative array containing 'status', 'content_type', and
+     * @return var An associative array containing 'status', 'content_type', and
      *         'content' or false
      */
     private function _do(

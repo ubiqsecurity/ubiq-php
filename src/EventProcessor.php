@@ -68,7 +68,7 @@ class Event
     /**
      * Get a key (serialize) an event object
      *
-     * @return The serialized data
+     * @return string The serialized data
      */
     public function getKey()
     {
@@ -89,12 +89,6 @@ class Event
         $return = [];
         foreach (self::SERIALIZE_MAP as $attribute => $key) {
             $return[$key] = $this->{$attribute};
-        }
-
-        if ($with_metadata) {
-            $return['first_call_timestamp'] = (new \DateTime())->setTimestamp($this->first_call_timestamp)->format('c');
-            $return['last_call_timestamp'] = (new \DateTime())->setTimestamp($this->last_call_timestamp)->format('c');
-            $return['count'] = $this->count;
         }
 
         return $return;
@@ -123,9 +117,11 @@ class Event
  */
 class EventProcessor
 {
-    private static $_creds = null;
-    private static $_last_reported = null;
-    private static $_processing = false;
+    private static ?Credentials $_creds = null;
+    private static ?string $_last_reported = null;
+    private static bool $_processing = false;
+    private static ?string $user_metadata = null;
+    private static int $_event_count_queued = 0;
 
     const EVENT_TYPE_ENCRYPT = 'encrypt';
     const EVENT_TYPE_DECRYPT = 'decrypt';
@@ -155,7 +151,7 @@ class EventProcessor
         $event_idx = $event->getKey();
         $cache_event = null;
 
-        $cache_event = self::$_creds::$cachemanager->getReference(
+        $cache_event = self::$_creds::$cachemanager::getReference(
             CacheManager::CACHE_TYPE_EVENTS,
             $event_idx
         );
@@ -167,8 +163,12 @@ class EventProcessor
         } else {
             ubiq_debug(self::$_creds, 'Initiating event with count 1 for ' . $event_idx);
 
-            self::$_creds::$cachemanager->set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
+            self::$_creds::$cachemanager::set(CacheManager::CACHE_TYPE_EVENTS, $event_idx, $event);
         }
+
+        self::$_event_count_queued++;
+
+        ubiq_debug(self::$_creds, 'Total event count incremented to '. self::$_event_count_queued);
 
         if (empty(self::$_last_reported)) {
             self::$_last_reported = time();
@@ -194,24 +194,91 @@ class EventProcessor
             return false;
         }
 
-        if (time() - self::$_last_reported > self::$_creds->config['event_reporting']['flush_interval']
+        if (time() - self::$_last_reported > self::$_creds::$config['event_reporting']['flush_interval']
         ) {
-            ubiq_debug(self::$_creds, 'Processing; time of ' . self::$_last_reported . ' to now exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
+            ubiq_debug(self::$_creds, 'Processing; time of ' . self::$_last_reported . ' to now exceeded threshold of ' . self::$_creds::$config['event_reporting']['flush_interval']);
 
             return true;
         }
-        ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds->config['event_reporting']['flush_interval']);
+        ubiq_debug(self::$_creds, 'Not processing; time of ' . self::$_last_reported . ' to now has not exceeded threshold of ' . self::$_creds::$config['event_reporting']['flush_interval']);
 
-        if (self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) > self::$_creds->config['event_reporting']['minimum_event_count']
+        if (self::$_event_count_queued > self::$_creds::$config['event_reporting']['minimum_count']
         ) {
-            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+            ubiq_debug(self::$_creds, 'Processing; count of ' . self::$_event_count_queued . ' exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
 
             return true;
         }
 
-        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_creds::$cachemanager->getCount(CacheManager::CACHE_TYPE_EVENTS) . ' has not exceeded threshold of ' . self::$_creds->config['event_reporting']['minimum_event_count']);
+        ubiq_debug(self::$_creds, 'Not processing; count of ' . self::$_event_count_queued . ' has not exceeded threshold of ' . self::$_creds::$config['event_reporting']['minimum_count']);
 
         return false;
+    }
+
+    /**
+     * Sets user metadata to send with events
+     *
+     * @param string $user_data A valid JSON string less than 1024 characters
+     * 
+     * @return None
+     */
+    public static function addUserDefinedMetadata(string $user_data) {
+        if (strlen($user_data) > 1024) {
+            throw new \Exception('User defined metadata cannot be longer than 1024 characters');
+
+            return false;
+        }
+        
+        $json = json_decode($user_data, TRUE);
+        
+        if (empty($json)) {
+            throw new \Exception('User defined metadata must not be null and must be valid JSON');
+
+            return false;
+        }
+        
+        ubiq_debug(self::$_creds, 'Setting user defined metadata to ' . $user_data);
+
+        self::$user_metadata = $user_data;
+    }
+
+    /**
+     * Clears user metadata to send with events
+     *
+     * @return None
+     */
+    public static function clearUserDefinedMetadata() {
+        self::$user_metadata = null;
+    }
+
+    /**
+     * Converts timestamp to formatted datetime with granularity based on configuration
+     *
+     * @param string $timestamp Timestamp to format
+     * 
+     * @return None
+     */
+    private static function formatTimestamp(string $timestamp) {
+        switch (self::$_creds::$config['event_reporting']['timestamp_granularity'] ?? "NANOS") {
+            case "MINUTES":
+                return date('c', floor($timestamp/60)*60);
+            case "HOURS":
+                return date('c', floor($timestamp/60/60)*60*60);
+            case "HALF_DAYS":
+                $ts = floor($timestamp/60/60/24)*60*60*24;
+                if (date('H', $timestamp) > 12) {
+                    $ts += 60*60*12;
+                }
+                $dt = date('c', $ts);
+                return $dt;
+            case "DAYS":
+                return date('c', floor($timestamp/60/60/24)*60*60*24);
+            case "SECONDS":
+                return date('c', $timestamp);
+            case "NANOS":
+            case "MILLIS":
+                default:
+                return (new \DateTime())->format('Y-m-d\TH:i:s.uP');
+        }
     }
 
     /**
@@ -232,19 +299,31 @@ class EventProcessor
         
         ubiq_debug(self::$_creds, 'Processing events ' . ($async ? 'asyncronously' : 'syncronously'));
 
-        $cached_events = self::$_creds::$cachemanager->getAll(CacheManager::CACHE_TYPE_EVENTS);
-        self::$_creds::$cachemanager->clearAll(CacheManager::CACHE_TYPE_EVENTS);
+        $cached_events = self::$_creds::$cachemanager::getAll(CacheManager::CACHE_TYPE_EVENTS);
+        self::$_creds::$cachemanager::clearAll(CacheManager::CACHE_TYPE_EVENTS);
 
         // format for reporting
         $events = [];
         foreach ($cached_events as $cached_event) {
-            $event = $cached_event->getMappedArray(true);
+            $event = $cached_event->getMappedArray();
 
             $event['product'] = \Ubiq\LIBRARY;
             $event['product_version'] = \Ubiq\VERSION;
             $event['user-agent'] = \Ubiq\LIBRARY . '/' . \Ubiq\VERSION;
             $event['api_version'] = \Ubiq\API_VERSION;
 
+            // set user metadata
+            if (!empty(self::$user_metadata)) {
+                $event['user_defined'] = self::$user_metadata;
+            }
+    
+            // set count
+            $event['count'] = $cached_event->count;
+
+            // set time stamp granularity
+            $event['first_call_timestamp'] = self::formatTimestamp($cached_event->first_call_timestamp);
+            $event['last_call_timestamp'] = self::formatTimestamp($cached_event->last_call_timestamp);
+    
             $events[] = $event;
         }
         $events = ['usage' => $events];
@@ -265,18 +344,27 @@ class EventProcessor
             self::$_creds->getSapi()
         );
 
-        if ($async) {
-            $resp = $http->postAsync(
-                self::$_creds->getHost() . '/api/v3/tracking/events',
-                json_encode($events),
-                'application/json'
-            );
-        } else {
-            $resp = $http->post(
-                self::$_creds->getHost() . '/api/v3/tracking/events',
-                json_encode($events),
-                'application/json'
-            );
+        try {
+            if ($async) {
+                $resp = $http->postAsync(
+                    self::$_creds->getHost() . '/api/v3/tracking/events',
+                    json_encode($events),
+                    'application/json'
+                );
+            } else {
+                $resp = $http->post(
+                    self::$_creds->getHost() . '/api/v3/tracking/events',
+                    json_encode($events),
+                    'application/json'
+                );
+            }
+        }
+        catch (\Exception $e) {
+            if (self::$_creds::$config['event_reporting']['trap_exceptions'] ?? false == true) {
+                throw $e;
+            }
+
+            ubiq_debug(self::$_creds, 'Ignored exception from event reporting ' . $e->getMessage());
         }
 
         ubiq_debug(self::$_creds, 'Processed ' . sizeof($events['usage']) . ' events');
@@ -285,5 +373,6 @@ class EventProcessor
 
         self::$_last_reported = time();
         self::$_processing = false;
+        self::$_event_count_queued = 0;
     }
 }

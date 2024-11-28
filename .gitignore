@@ -6,6 +6,9 @@
 
 # unit test cache directory
 /.phpunit.cache/
+.phpunit*
 
 # code quality output
 phpcs.json
+coverage-report.xml
+phpunit-coverage-report.*

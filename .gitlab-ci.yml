@@ -14,9 +14,14 @@ test:
         - apt -y update
         - apt -y install composer make php-curl php-xdebug php-xml
         - composer install
+        - export XDEBUG_MODE=coverage
     script:
         - make test
     artifacts:
         expire_in: 1 hour
         reports:
             codequality: phpcs.json
+            coverage_report:
+                coverage_format: cobertura
+                path: phpunit-coverage.txt
+    coverage: '/^\s*Lines:\s*\d+.\d+\%/'

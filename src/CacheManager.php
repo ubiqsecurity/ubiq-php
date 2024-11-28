@@ -23,8 +23,12 @@ namespace Ubiq;
  */
 class CacheManager
 {
+    const CACHE_TYPE_GENERAL = 'general';
     const CACHE_TYPE_KEYS = 'keys';
     const CACHE_TYPE_EVENTS = 'events';
+    const CACHE_TYPE_DATASET_CONFIGS = 'dataset_configs';
+
+    public static $cache_counts = []; // indexed by cache type keys
 
     public static $caches = [
         // indexed by datasetname - md5(base64_encode($encrypted_data_key))
@@ -37,42 +41,41 @@ class CacheManager
         //     '_algorithm'    => new Algorithm()
         //     '_fragment'     => ['security_model']['enable_data_fragmentation']
         // ]
+        self::CACHE_TYPE_GENERAL      => [],
+
         self::CACHE_TYPE_KEYS      => [],
 
-        self::CACHE_TYPE_EVENTS    => []
+        self::CACHE_TYPE_EVENTS    => [],
+
+        self::CACHE_TYPE_DATASET_CONFIGS    => []
+
     ];
+
+    private static $cache_ttl = [];
 
     /**
      * Get a cache key
      *
      * @param string $cache_type The cache type to search
-     * @param string $key        The cache key to retrieve
+     * @param var $key        The cache key to retrieve
      * 
      * @return Var of the cache or FALSE if not found
      */
-    public function get(string $cache_type, string $key)
+    public static function get(string $cache_type, $key)
     {
+        if (empty($key)) {
+            return false;
+        }
+        
         if (!array_key_exists($cache_type, self::$caches)) {
             return false;
         }
 
-        return self::$caches[$cache_type][$key] ?? false;
-    }
-
-    /**
-     * Get a cache key count
-     *
-     * @param string $cache_type The cache type to search
-     * 
-     * @return The number of elements in the cache
-     */
-    public function getCount(string $cache_type)
-    {
-        if (!array_key_exists($cache_type, self::$caches)) {
-            return -1;
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] <= time()) {
+            return false;
         }
 
-        return sizeof(self::$caches[$cache_type]);
+        return self::$caches[$cache_type][$key] ?? false;
     }
 
     /**
@@ -82,13 +85,25 @@ class CacheManager
      * 
      * @return The array of all cache elements
      */
-    public function getAll(string $cache_type)
+    public static function getAll(string $cache_type)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return [];
         }
 
-        return self::$caches[$cache_type];
+        // loop through to validate TTL on anything in the cache
+        $return = [];
+        foreach (self::$caches[$cache_type] as $key) {
+            $key_idx = (is_string($key) == 'string' ? $key : $key->getKey());
+            
+            $item = self::get($cache_type, $key_idx);
+            
+            if (!empty($item)) {
+                $return[] = $item;
+            }
+        }
+
+        return $return;
     }
 
     /**
@@ -98,8 +113,16 @@ class CacheManager
      * 
      * @return None
      */
-    public function clearAll(string $cache_type)
+    public static function clearAll(string $cache_type)
     {
+        foreach (self::$caches[$cache_type] as $key) {
+            $key_idx = (is_string($key) == 'string' ? $key : $key->getKey());
+
+            if (array_key_exists($cache_type . $key_idx, self::$cache_ttl)) {
+                unset(self::$cache_ttl[$cache_type . $key_idx]);
+            }
+        }
+
         self::$caches[$cache_type] = [];
     }
 
@@ -111,7 +134,7 @@ class CacheManager
      * 
      * @return Reference to cache result
      */
-    public function getReference(string $cache_type, string $key)
+    public static function getReference(string $cache_type, string $key)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             $return = false;
@@ -120,8 +143,14 @@ class CacheManager
         }
 
         if (!array_key_exists($key, self::$caches[$cache_type])) {
-             $return = false;
+            $return = false;
 
+            return;
+        }
+
+        if (array_key_exists($cache_type . $key, self::$cache_ttl) && self::$cache_ttl[$cache_type . $key] <= time()) {
+            $return = false;
+            
             return;
         }
 
@@ -137,9 +166,8 @@ class CacheManager
      * @param string $key        The key to set
      * @param string $val        The value to set
      * 
-     * @return Null if not found
      */
-    public function set(string $cache_type, string $key, $val)
+    public static function set(string $cache_type, string $key, $val, ?int $ttl_timestamp = NULL)
     {
         if (!array_key_exists($cache_type, self::$caches)) {
             return null;
@@ -149,7 +177,22 @@ class CacheManager
     }
 
     /**
+     * Set the TTL for a cached type/key pair
+     *
+     * @param string $cache_type The cache type to set
+     * @param string $key        The key to set
+     * @param ?int $ttl_timestamp The timestamp when this cached item expires
+     * 
+     * @return None
+     */
+    public static function setTTL(string $cache_type, string $key, int $ttl_timestamp)
+    {
+        self::$cache_ttl[$cache_type . $key] = $ttl_timestamp;
+    }
+
+    /**
      * Copy a cache value to another key
+     * Does not retain TTL
      *
      * @param string $cache_type The cache type to set
      * @param string $source_key The key to copy from
