@@ -31,7 +31,6 @@ error_reporting(E_ERROR | E_WARNING | E_PARSE | E_NOTICE | E_STRICT);
  *
  * @covers Ubiq\Request
  *
- * @uses Ubiq\_Credentials
  * @uses Ubiq\Credentials
  */
 final class RequestTest extends TestCase

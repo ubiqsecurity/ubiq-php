@@ -25,10 +25,12 @@ namespace Ubiq;
  */
 class Decryption
 {
-    private $_key_raw, $_key_enc;
-    private $_session, $_fingerprint;
-    private $_algorithm, $_fragment;
-    private $_creds, $_dataset;
+    private $_key_raw;
+    private $_key_enc;
+    private $_algorithm;
+
+    private ?Dataset $_dataset = null;
+    private ?Credentials $_creds = null;
 
     private $_iv;
 
@@ -45,27 +47,41 @@ class Decryption
         Credentials $creds = null,
         $dataset = null
     ) {
-        if (!Dataset::isDataset($dataset)) {
-            $dataset = new Dataset($dataset);
-        }
-
         $this->_creds = $creds;
-        $this->_dataset = $dataset;
 
         if ($creds) {
             $this->_reset();
+            $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
+            $this->_dataset = $dataset;
         }
     }
 
+    /**
+     * Gets the type of the dataset being acted upon
+     *
+     * @return string A string containing the dataset type DatasetManager::DATASET_TYPE_STRUCTURED or DATASET_TYPE_UNSTRUCTURED
+     */
+    public function getDatasetType() : string
+    {
+        return $this->_dataset->type;
+    }
+    
     /**
      * Begin decryption of a new ciphertext
      *
      * No data has been provided, yet, so this function can't do anything.
      *
-     * @return A string containing the initial portion of the plaintext
+     * @return string A string containing the initial portion of the plaintext
      */
     public function begin() : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Decryption::begin() for dataset type of ' . $this->_dataset->type
+            );
+        }
+
         if (!is_null($this->_iv)) {
             throw new \Exception(
                 'Decryption already in progress'
@@ -97,7 +113,7 @@ class Decryption
      * @param string $ciphertext The ciphertext (obviously containing
      *                           the header) to be parsed
      *
-     * @return An associative array containing the following elements:
+     * @return array An associative array containing the following elements:
      *         version, flags, algoid, iv, key_enc, and content
      */
     private function _ctparse(string &$ciphertext) : array
@@ -134,16 +150,23 @@ class Decryption
     }
 
     /**
-     * Add the given ciphertext to the current decryption
+     * Add the given ciphertext to the current decryption for unstructured
      *
      * @param string $ciphertext The ciphertext to be decrypted
      *
-     * @return A string containing a portion of the ciphertext. This
+     * @return string A string containing a portion of the plaintext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
     public function update(string $ciphertext) : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Decryption::update() for dataset type of ' . $this->_dataset->type
+            );
+        }
+        
         if (is_null($this->_iv)) {
             throw new \Exception(
                 'update() called without begin()'
@@ -171,8 +194,6 @@ class Decryption
 
         $this->_key_enc = $key['_key_enc'] ?? null;
         $this->_key_raw = $key['_key_raw'] ?? null;
-        $this->_session = $key['_session'] ?? null;
-        $this->_fingerprint = $key['_fingerprint'] ?? null;
         $this->_algorithm = $key['_algorithm'] ?? null;
         $this->_iv = $header['iv'];
 
@@ -203,14 +224,79 @@ class Decryption
     }
 
     /**
+     * Decrypt the given ciphertext for structured
+     *
+     * @param string $ciphertext The ciphertext to be decrypted
+     *
+     * @return string A string containing the plaintext
+     */
+    public function decrypt_structured(string $ciphertext) : string
+    {
+        // only structured
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_STRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Decryption::decrypt_structured() for dataset type of ' . $this->_dataset->type
+            );
+        }
+        
+        $parts = Structured::deconstructFromPartialRules($ciphertext, $this->_creds, $this->_dataset);
+        $string = $parts['string'];
+
+        $key_number = FF1::decodeKeyNumber($string, $this->_dataset);
+        
+        // if we are caching structured keys decrypted, we can cache the whole FF1 object
+        $cache_ff1 = ($this->_creds::$config['key_caching']['structured'] && !$this->_creds::$config['key_caching']['encrypt']);
+        if ($cache_ff1) {
+            $cipher = $this->_creds::$cachemanager::get(CacheManager::CACHE_TYPE_GENERAL, 'ff1-' . $this->_dataset->name . '-' . $key_number);
+        }
+
+        if (empty($cipher)) {
+            $key = $this->_creds::$keymanager->getDecryptionKey(
+                $this->_creds,
+                $this->_dataset,
+                ['key_number' => $key_number]
+            );
+
+            $cipher = new FF1(
+                $this->_creds,
+                $key['_key_raw'],
+                $this->_dataset->structured_config['tweak'],
+                $this->_dataset->structured_config['input_character_set'],
+                $this->_creds::$config['logging']['vvverbose'] ?? false
+            );
+
+            if ($cache_ff1) {
+                $this->_creds::$cachemanager::set(
+                    CacheManager::CACHE_TYPE_GENERAL,
+                    'ff1-' . $this->_dataset->name . '-' . $key_number,
+                    $cipher,
+                    KeyManager::getCacheTTL($this->_creds)
+                );
+            }
+        }
+
+        $plaintext_str = $cipher->decryptToOutput($string, $this->_dataset);
+        $plaintext_str = Structured::reconstructFromPartialRules($plaintext_str, $parts, $this->_creds, $this->_dataset);
+        
+        return $plaintext_str;
+    }
+
+    /**
      * End the current decryption process
      *
-     * @return A string containing any remaining ciphertext or authentication
+     * @return string A string containing any remaining ciphertext or authentication
      *         information. This string should be appended to the string
      *         returned by the most recent call to either begin() or update()
      */
     public function end() : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Decryption::end() for dataset type of ' . $this->_dataset->type
+            );
+        }
+        
         if (is_null($this->_iv)) {
             throw new \Exception(
                 'end() called before begin()'
@@ -238,10 +324,7 @@ class Decryption
 
         $this->_key_raw     = null;
         $this->_key_enc     = null;
-        $this->_session     = null;
-        $this->_fingerprint = null;
         $this->_algorithm   = null;
-        $this->_fragment    = null;
     }
 
     /**

@@ -26,9 +26,12 @@ namespace Ubiq;
 class Encryption
 {
 
-    private $_key_raw, $_key_enc;
-    private $_session, $_fingerprint;
-    private $_algorithm, $_fragment;
+    private $_key_raw;
+    private $_key_enc; // for structured, this is the encoded key number
+    private $_algorithm;
+
+    private ?Dataset $_dataset = null;
+    private ?Credentials $_creds = null;
 
     private $_header;
 
@@ -49,44 +52,62 @@ class Encryption
      *                                   Will default to null, which will be derived
      *                                   based on access
      * @param Bool        $multiple_uses If the encryption key should be re-used
+     * @param string      $key           A key to be used to encrypt; if not provided,
+     *                                   the current one will be fetched
+     *                                   (optional)
      */
     public function __construct(
         Credentials $creds = null,
         $dataset = null,
-        $multiple_uses = false
+        $multiple_uses = false,
+        $key = NULL
     ) {
-        if (!Dataset::isDataset($dataset)) {
-            $dataset = new Dataset($dataset);
-        }
-
-        ubiq_debug($creds, 'Creating encryption object for ' . $dataset->name . ' for ' . ($multiple_uses ? 'multiple' : 'single') . ' uses');
 
         if ($creds) {
+            $dataset = $creds::$datasetmanager->getDataset($creds, $dataset);
+        }
+
+        if ($creds && empty($key)) {
             $key = $creds::$keymanager->getEncryptionKey(
                 $creds,
                 $dataset,
-                !$multiple_uses
+                (!$multiple_uses) && ($dataset->type == DatasetManager::DATASET_TYPE_UNSTRUCTURED)
             );
         }
 
-        $this->_key_enc = $key['_key_enc'] ?? null;
-        $this->_key_raw = $key['_key_raw'] ?? null;
-        $this->_session = $key['_session'] ?? null;
-        $this->_fingerprint = $key['_fingerprint'] ?? null;
-        $this->_algorithm = $key['_algorithm'] ?? null;
-        $this->_fragment = $key['_fragment'] ?? null;
-        
-        $this->_dataset = $dataset;
-        $this->_creds = $creds;
+        if (!empty($key)) {
+            $this->_key_enc = $key['_key_enc'] ?? null;
+            $this->_key_raw = $key['_key_raw'] ?? null;
+            $this->_algorithm = $key['_algorithm'] ?? null;
+            $this->_dataset = $dataset;
+            $this->_creds = $creds;
+        }
     }
 
     /**
+     * Gets the type of the dataset being acted upon
+     *
+     * @return string A string containing the dataset type DatasetManager::DATASET_TYPE_STRUCTURED or DATASET_TYPE_UNSTRUCTURED
+     */
+    public function getDatasetType() : string
+    {
+        return $this->_dataset->type;
+    }
+    
+    
+    /**
      * Begin encryption of a new plaintext
      *
-     * @return A string containing the initial portion of the ciphertext
+     * @return string A string containing the initial portion of the ciphertext
      */
     public function begin() : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Encryption::begin() for dataset type of ' . $this->_dataset->type
+            );
+        }
 
         if (!is_null($this->_header)) {
             throw new \Exception(
@@ -104,7 +125,7 @@ class Encryption
                 'key_number'                => 0,
             ])
         );
-
+        
         /*
          * there is an openssl_random_pseudo_bytes() function,
          * but whether it returns cryptographically strong random
@@ -138,17 +159,26 @@ class Encryption
      *
      * @param string $plaintext The plaintext to be encrypted
      *
-     * @return A string containing a portion of the ciphertext. This
+     * @return string A string containing a portion of the ciphertext. This
      *         string should be appended to the string returned by the most
      *         recent call to either begin() or update()
      */
     public function update(string $plaintext) : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Encryption::update() for dataset type of ' . $this->_dataset->type
+            );
+        }
+        
         if (is_null($this->_header)) {
             throw new \Exception(
                 'update() called without begin()'
             );
-        } else if (strlen($this->_header) == 0) {
+        }
+        
+        if (strlen($this->_header) == 0) {
             throw new \Exception(
                 'piecewise encryption not supported'
             );
@@ -176,14 +206,89 @@ class Encryption
     }
 
     /**
+     * Encrypt the given ciphertext for structured
+     *
+     * @param string $plaintext The plaintext to be decrypted
+     *
+     * @return string A string containing the ciphertext
+     */
+    public function encrypt_structured(
+        $plaintext
+    ) : string {
+        // only structured
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_STRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Encryption::encrypt_structured() for dataset type of ' . $this->_dataset->type
+            );
+        }
+
+        $input_chars = array_flip(mb_str_split($this->_dataset->structured_config['input_character_set']));
+
+        $parts = Structured::deconstructFromPartialRules($plaintext, $this->_creds, $this->_dataset);
+        $string = $parts['string'];
+
+        // Validate trimmed input
+        foreach (mb_str_split($string) as $char) {
+            if (!array_key_exists($char, $input_chars)) {
+                throw new \Exception('Invalid character found in the input: ' . $char);
+            }
+        }
+    
+        if (mb_strlen($string) < $this->_dataset->structured_config['min_input_length']) {
+            throw new \Exception('Invalid input length does not meet minimum of ' . $this->_dataset->structured_config['min_input_length']);
+        }
+    
+        if (mb_strlen($string) > $this->_dataset->structured_config['max_input_length']) {
+            throw new \Exception('Invalid input length exceeds maximum of ' . $this->_dataset->structured_config['max_input_length']);
+        }
+
+        // if we are caching structured keys decrypted, we can cache the whole FF1 object
+        $cache_ff1 = ($this->_creds::$config['key_caching']['structured'] && !$this->_creds::$config['key_caching']['encrypt']);
+        if ($cache_ff1) {
+            $cipher = $this->_creds::$cachemanager::get(CacheManager::CACHE_TYPE_GENERAL, 'ff1-' . $this->_dataset->name . '-' . $this->_key_enc);
+        }
+        
+        if (empty($cipher)) {
+            $cipher = new FF1(
+                $this->_creds,
+                $this->_key_raw,
+                $this->_dataset->structured_config['tweak'],
+                $this->_dataset->structured_config['input_character_set'],
+                $this->_creds::$config['logging']['vvverbose'] ?? false
+            );
+
+            if ($cache_ff1) {
+                $this->_creds::$cachemanager::set(
+                    CacheManager::CACHE_TYPE_GENERAL,
+                    'ff1-' . $this->_dataset->name . '-' . $this->_key_enc,
+                    $cipher,
+                    KeyManager::getCacheTTL($this->_creds)
+                );
+            }
+        }
+
+        $cipher_str = $cipher->encryptToOutput($string, $this->_dataset, $this->_key_enc);
+        $cipher_str = Structured::reconstructFromPartialRules($cipher_str, $parts, $this->_creds, $this->_dataset);
+
+        return $cipher_str;
+    }
+
+    /**
      * End the current encryption process
      *
-     * @return A string containing any remaining ciphertext or authentication
+     * @return string A string containing any remaining ciphertext or authentication
      *         information. This string should be appended to the string
      *         returned by the most recent call to either begin() or update()
      */
     public function end() : string
     {
+        // only unstructured has incremental
+        if ($this->_dataset->type != DatasetManager::DATASET_TYPE_UNSTRUCTURED) {
+            throw new \Exception(
+                'Invalid call to Encryption::end() for dataset type of ' . $this->_dataset->type
+            );
+        }
+        
         if (is_null($this->_header)) {
             throw new \Exception(
                 'end() called without begin()'
@@ -200,6 +305,7 @@ class Encryption
 
         return $ret;
     }
+
 
     /**
      * Destroy the encryption object
