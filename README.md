@@ -1,6 +1,4 @@
 # Ubiq Security PHP Library
-[![badge][pipeline-status]][gitlab-repo]
-[![badge][coverage-status]][gitlab-repo]
 
 The Ubiq Security PHP Library provides convenient interaction with the Ubiq
 Security Platform API from applications written in PHP. It includes a
