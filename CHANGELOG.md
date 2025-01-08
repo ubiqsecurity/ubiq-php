@@ -1,6 +1,10 @@
 # Changelog
 
-## 2.0.0 - 6/27/2023
+## 2.0.1 - 12/16/2024
+* Fix composer autoloading
+* Update composer install instructions
+
+## 2.0.0 - 11/28/2024
 * Added support for structured datasets
 * Added encryptForSearch method
 * Added user defined metadata to events

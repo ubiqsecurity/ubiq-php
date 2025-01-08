@@ -59,9 +59,9 @@
         die('Must specify dataset');
     }
 
-    $credentials = new Ubiq\Credentials($credentials_file);
+    $credentials = new Ubiq\Credentials($config_file);
 
-    if (!empty($config_file)) {
+    if (!empty($credentials)) {
         $credentials->load($credentials_file, $profile_name ?? 'default');
     }
 
