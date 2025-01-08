@@ -32,10 +32,8 @@ foreach (array(
     include implode(DIRECTORY_SEPARATOR, array(__DIR__, $file));
 }
 
-require realpath(__DIR__ . '/../vendor/autoload.php');
 
-
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 const LIBRARY = 'ubiq-php';
 const API_VERSION = 'V3';
 const HEADER_V0_FLAG_AAD = 1;
