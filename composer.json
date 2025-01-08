@@ -15,5 +15,14 @@
         "phpunit/phpunit": ">=8",
         "squizlabs/php_codesniffer": "*",
         "micheh/phpcs-gitlab": "*"
+    },
+    
+    "autoload": {
+        "psr-4": {
+            "Ubiq\\": "src/"
+        },
+        "files": [
+            "src/Ubiq.php"
+        ]
     }
 }
