@@ -17,14 +17,17 @@ Tests covered by
     vendor/bin/phpunit --configuration phpunit.xml
 ```
 
-## Installation
+## Installation Using Composer (preferred method)
 
-On Debian and Debian-like Linux systems:
-```sh
-$ sudo apt install php php-xml php-curl composer
+Install composer according to your operating system instructions https://getcomposer.org/doc/00-intro.md
+
+```
+composer install ubiqsecurity/ubiq-php
 ```
 
-### Clone the PHP repository, and install dependencies
+### Installing from source
+
+You may also install the library directly from source, but you will need to manage your own dependency and autoloading.  Composer is still used by the Ubiq PHP library to manage its internal dependencies.
 
 ```sh
 $ git clone https://gitlab.com/ubiqsecurity/ubiq-php.git
@@ -32,24 +35,14 @@ $ cd ubiq-php
 $ composer install
 ```
 
-Then include the library in your code with
+Include the Composer autoloader of the Ubiq PHP library somewhere in your code:
+```
+require '/path/to/ubiq/vendor/autoload.php';
+```
+
+Then include the library in your code with:
 ```
 require '/path/to/Ubiq.php';
-```
-
-### Add repository and require to composer.json
-
-```
-"repositories": {
-    "ubiq-php": {
-        "type": "git",
-        "url": "https://gitlab.com/ubiqsecurity/ubiq-php.git"
-    }
-}
-
-"require": {
-    "ubiqsecurity/ubiq-php":"dev-master"
-}
 ```
 
 ### Requirements
