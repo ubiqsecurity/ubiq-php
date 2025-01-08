@@ -71,6 +71,9 @@ class Credentials
      */
     public function viable() : bool
     {
+        if (empty($this::$_credentials_parts)) {
+            return false;
+        }
         return $this::$_credentials_parts->viable();
     }
 
