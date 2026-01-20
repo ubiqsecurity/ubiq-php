@@ -1,12 +1,40 @@
+# GitLab Security Scanning Templates
+include:
+    - template: Security/SAST.gitlab-ci.yml
+    - template: Security/Secret-Detection.gitlab-ci.yml
+    - template: Security/Dependency-Scanning.gitlab-ci.yml
+
 image:
     name: debian:stable
 
 variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
+    # Security scanning variables
+    SAST_EXCLUDED_ANALYZERS: ""
+    SECRET_DETECTION_EXCLUDED_PATHS: ""
 
 stages:
     - test
+
+# =============================================================================
+# SECURITY SCANNING JOBS
+# =============================================================================
+
+sast:
+    stage: test
+    variables:
+        SAST_EXCLUDED_PATHS: "vendor"
+
+secret_detection:
+    stage: test
+    variables:
+        SECRET_DETECTION_EXCLUDED_PATHS: "vendor/"
+
+dependency_scanning:
+    stage: test
+    variables:
+        DS_EXCLUDED_PATHS: "vendor"
 
 test:
     stage: test
