@@ -65,6 +65,85 @@ class Decryption
     {
         return $this->_dataset->type;
     }
+
+    /**
+     * @return Dataset|null The resolved dataset for this decryption.
+     */
+    public function getDataset(): ?Dataset
+    {
+        return $this->_dataset;
+    }
+
+    /**
+     * Reject calls to the string-typed decrypt() entry point when the
+     * dataset has a data_type that needs a dedicated typed helper.
+     * The set of "typed" data_types is shared with Encryption — see
+     * {@see Encryption::TYPED_DATA_TYPES}. "string", "token", null,
+     * and anything else fall through to the standard pipeline.
+     */
+    public static function guardStringDataType(Decryption $dec, string $action): void
+    {
+        $dataset = $dec->getDataset();
+        if ($dataset === null) {
+            return;
+        }
+        $dt = $dataset->getDataType();
+        if (!in_array($dt, Encryption::TYPED_DATA_TYPES, true)) {
+            return;
+        }
+        throw new \Exception(
+            "Dataset '" . $dataset->name . "' has data_type '" . $dt . "' — "
+            . "use " . $action . ucfirst($dt) . "() instead of " . $action . "()"
+        );
+    }
+
+    public static function guardDateDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'date') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'date'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
+
+    public static function guardDateTimeDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'datetime') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'datetime'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
+
+    /**
+     * Reject decryptInteger() when the dataset isn't typed 'integer'.
+     */
+    public static function guardIntegerDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'integer') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'integer'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
     
     /**
      * Begin decryption of a new ciphertext
@@ -276,8 +355,17 @@ class Decryption
         }
 
         $plaintext_str = $cipher->decryptToOutput($string, $this->_dataset);
+
+        // Reverse the encrypt-side encode/pad pipeline. Order is the
+        // mirror of Encryption::encrypt_structured(): unpad first
+        // (strip pad characters added on encrypt), then decode
+        // (base64/base32 back to the original bytes). Both are no-ops
+        // when the dataset has no input_encoding / input_pad_character.
+        $plaintext_str = \Ubiq\Pipeline\PadInputOperation::unapply($plaintext_str, $this->_dataset);
+        $plaintext_str = \Ubiq\Pipeline\DecodeInputOperation::apply($plaintext_str, $this->_dataset);
+
         $plaintext_str = Structured::reconstructFromPartialRules($plaintext_str, $parts, $this->_creds, $this->_dataset);
-        
+
         return $plaintext_str;
     }
 

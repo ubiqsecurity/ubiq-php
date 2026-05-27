@@ -212,14 +212,21 @@ specified file, or read from the default location (~/.ubiq/credentials).
 
 When performing encryption/decryption, keys are retrieved from the Ubiq API. To speed up peformance and reduce the number of calls to the API, keys are stored in a cache within the Credentials object. It is recommended to reuse the credentials object instead of reinstantiating it unless necessary to maintain a faster runtime.
 
-If desired, keys used for structured encryption can be pre-cached using the `primeKeyCache` method.  This is not used for unstructured dataset keys.
+If desired, keys used for structured encryption can be pre-cached using the `loadCache` method. This makes a single network call to the `/api/v0/fpe/def_keys` endpoint and populates both the dataset config cache and the encryption key cache for every dataset in the response — matching the ubiq-go `loadCache` flow (ubiq-java has an equivalent internal helper, `getFpeDefKeys`). Subsequent `encrypt` / `decrypt` / `encryptInteger` / `encryptDate` / etc. calls will hit the cache and skip the per-dataset API call.
+
+This is not used for unstructured dataset keys.
 
 ```php
 $credentials = new Ubiq\Credentials();
-$dataset_names = ["SSN", "FIRST_NAME", "LAST_NAME"];
 
-\Ubiq\primeKeyCache($credentials, $dataset_names);
+// Scope to a specific list of datasets:
+\Ubiq\loadCache($credentials, ["SSN", "FIRST_NAME", "LAST_NAME"]);
+
+// Or omit the argument to prefetch every dataset the API key has access to:
+\Ubiq\loadCache($credentials);
 ```
+
+`\Ubiq\primeKeyCache()` from ubiq-php 2.0.x is removed in 2.1.0 — callers must switch to `\Ubiq\loadCache()`. The old function silently dropped every dataset after the first in its response, so any pre-2.1.0 caller relying on its multi-dataset behavior was already broken.
 
 ### Encrypt a social security text field
 Pass credentials, the name of a structured dataset, and data into the encryption function.
@@ -278,6 +285,34 @@ Examples are shown below.
 ```
 
 
+### Typed datasets (integer, date, datetime)
+
+Datasets configured with a `data_type` other than `string` use typed entry points so the value is bridged correctly through the underlying FF1 cipher. The string-typed `\Ubiq\encrypt` / `\Ubiq\decrypt` functions reject these datasets with a message pointing to the correct helper.
+
+```php
+$credentials = new Ubiq\Credentials();
+
+// integer datasets (data_type = "integer", size 32 or 64)
+$cipher_int = \Ubiq\encryptInteger($credentials, -493356814481025, "integer64");
+$plain_int  = \Ubiq\decryptInteger($credentials, $cipher_int, "integer64");
+
+// date datasets (data_type = "date") — input MUST be UTC
+$plain_date  = new \DateTimeImmutable('1530-09-21T00:00:00Z');
+$cipher_date = \Ubiq\encryptDate($credentials, $plain_date, "date_2keys");
+$back_date   = \Ubiq\decryptDate($credentials, $cipher_date, "date_2keys");
+
+// datetime datasets (data_type = "datetime") — input MUST be UTC
+$plain_dt  = new \DateTimeImmutable('2092-11-22T22:38:20Z');
+$cipher_dt = \Ubiq\encryptDateTime($credentials, $plain_dt, "datetime");
+$back_dt   = \Ubiq\decryptDateTime($credentials, $cipher_dt, "datetime");
+```
+
+Range validation against the dataset's `data_type_config` (min/max input int value or date value) is performed before the cipher call. Non-UTC `DateTimeImmutable` inputs are rejected with `InvalidArgumentException` to match the .NET `DateTimeKind.Utc` check and avoid silent timezone drift.
+
+### Pre/post-processing (input_encoding, input_pad_character)
+
+When a dataset's config includes `input_encoding = base64|base32` and/or an `input_pad_character`, the library transparently applies the matching encode + pad on encrypt and unpad + decode on decrypt. No caller-side change is required — the same `\Ubiq\encrypt` / `\Ubiq\decrypt` calls work.
+
 ### Encrypt For Search
 
 The same plaintext data will result in different cipher text when encrypted using different data keys. The Encrypt For Search function will encrypt the same plain text for a given dataset using all previously used data keys. This will provide a collection of cipher text values that can be used when searching for existing records where the data was encrypted and the specific version of the data key is not known in advance.
@@ -285,12 +320,28 @@ The same plaintext data will result in different cipher text when encrypted usin
 ```php
 
 $credentials = new Ubiq\Credentials();
-$dataset_name = 'SSN'; // or SSN,PHONE or ['SSN', 'PHONE']
+$dataset_name = 'SSN';
 
 $plaintext = '123-45-6789';
 
-$ciphertext_array = \Ubiq\encryptForSearch($credentials, $dataset_name, $plaintext)
+$ciphertext_array = \Ubiq\encryptForSearch($credentials, $plaintext, $dataset_name);
 ```
+
+For typed datasets, use the matching typed search helpers — they bridge the value through the underlying FF1 pipeline the same way `encryptInteger` / `encryptDate` / `encryptDateTime` do:
+
+```php
+$plain_int   = -493356814481025;
+$cipher_ints = \Ubiq\encryptIntegerForSearch($credentials, $plain_int, "integer64");
+// $cipher_ints is int[] — one entry per active key rotation
+
+$plain_date   = new \DateTimeImmutable('1530-09-21T00:00:00Z');
+$cipher_dates = \Ubiq\encryptDateForSearch($credentials, $plain_date, "date_2keys");
+
+$plain_dt   = new \DateTimeImmutable('2092-11-22T22:38:20Z');
+$cipher_dts = \Ubiq\encryptDateTimeForSearch($credentials, $plain_dt, "datetime");
+```
+
+`\Ubiq\encryptForSearch` rejects typed datasets with a message pointing at the correct helper, mirroring the typed-rejection behavior of `\Ubiq\encrypt` / `\Ubiq\decrypt`.
 
 
 ### Configuration File
