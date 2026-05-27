@@ -93,6 +93,348 @@ class Encryption
     {
         return $this->_dataset->type;
     }
+
+    /**
+     * @return Dataset|null The resolved dataset for this encryption.
+     */
+    public function getDataset(): ?Dataset
+    {
+        return $this->_dataset;
+    }
+
+    /**
+     * Data types that require their own typed helper (encryptInteger,
+     * encryptDate, encryptDateTime) and must not flow through the
+     * plain string encrypt path. Anything not on this list — null,
+     * "string", "token", future names — is treated as string and
+     * runs through the standard encrypt_structured pipeline (which
+     * is what ubiq-java and ubiq-dotnet do).
+     */
+    public const TYPED_DATA_TYPES = ['integer', 'date', 'datetime'];
+
+    /**
+     * Reject calls to the string-typed encrypt() entry point when the
+     * dataset has a typed data_type that needs a dedicated helper.
+     * "string", "token", null, and anything else fall through.
+     */
+    public static function guardStringDataType(Encryption $enc, string $action): void
+    {
+        $dataset = $enc->getDataset();
+        if ($dataset === null) {
+            return;
+        }
+        $dt = $dataset->getDataType();
+        if (!in_array($dt, self::TYPED_DATA_TYPES, true)) {
+            return;
+        }
+        throw new \Exception(
+            "Dataset '" . $dataset->name . "' has data_type '" . $dt . "' — "
+            . "use " . $action . ucfirst($dt) . "() instead of " . $action . "()"
+        );
+    }
+
+    /**
+     * Reject calls to encryptInteger() when the dataset isn't typed
+     * as 'integer' or doesn't carry a data_type_config block.
+     */
+    public static function guardIntegerDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'integer') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'integer'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
+
+    /**
+     * Range-check the value against the dataset's data_type_config and
+     * render it as a base-10 string padded with leading '0's to
+     * min_input_length. A leading '-' is preserved (and not counted
+     * toward min_input_length) so the dataset's passthrough rule for
+     * '-' handles the sign in the FF1 path.
+     */
+    /**
+     * Reject encryptDate / decryptDate when the dataset isn't a 'date'.
+     */
+    public static function guardDateDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'date') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'date'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
+
+    /**
+     * Reject encryptDateTime / decryptDateTime when the dataset isn't 'datetime'.
+     */
+    public static function guardDateTimeDataType(Dataset $dataset): void
+    {
+        if ($dataset->getDataType() !== 'datetime') {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' has data_type '"
+                . ($dataset->getDataType() ?? 'null') . "' — expected 'datetime'"
+            );
+        }
+        if ($dataset->getDataTypeConfig() === null) {
+            throw new \Exception(
+                "Dataset '" . $dataset->name . "' is missing data_type_config"
+            );
+        }
+    }
+
+    /**
+     * Number of whole days between $epoch and $date, taking the
+     * date-only portion of each. Negative when $date precedes $epoch.
+     * Both timestamps are interpreted in their respective timezones —
+     * callers should normalize to UTC before invoking.
+     */
+    public static function daysBetween(\DateTimeImmutable $epoch, \DateTimeImmutable $date): int
+    {
+        $epochDate = $epoch->setTime(0, 0, 0);
+        $dateOnly = $date->setTime(0, 0, 0);
+        $epochSeconds = $epochDate->getTimestamp();
+        $dateSeconds = $dateOnly->getTimestamp();
+        return intdiv($dateSeconds - $epochSeconds, 86400);
+    }
+
+    /**
+     * Number of seconds between $epoch and $date.
+     */
+    public static function secondsBetween(\DateTimeImmutable $epoch, \DateTimeImmutable $date): int
+    {
+        return $date->getTimestamp() - $epoch->getTimestamp();
+    }
+
+    /**
+     * Render a non-negative base-10 integer as a base-N string in the
+     * given alphabet, padded with the alphabet's "zero" character to
+     * the requested length. Throws OutOfRangeException if the value
+     * doesn't fit in `$length` characters. Used to bridge native ints
+     * to a dataset's FF1 input or output alphabets — the alphabet
+     * might be base-10 (integer / datetime), base-32 (date), etc.
+     */
+    public static function intToBaseN(int $value, string $alphabet, int $length): string
+    {
+        if ($value < 0) {
+            throw new \InvalidArgumentException('intToBaseN: value must be non-negative; sign handled by caller');
+        }
+        $radix = mb_strlen($alphabet);
+        if ($radix < 2) {
+            throw new \InvalidArgumentException('intToBaseN: alphabet must have at least 2 chars');
+        }
+        $alphabetChars = mb_str_split($alphabet);
+        $zero = $alphabetChars[0];
+
+        if ($value === 0) {
+            return str_repeat($zero, max($length, 1));
+        }
+
+        // $value is a native PHP int, so it always fits in 64-bit and
+        // native modulo/division is exact — no BigInteger needed on the
+        // encode side (Rust to_charset_radix pattern).
+        $out = '';
+        $n = $value;
+        while ($n > 0) {
+            $out = $alphabetChars[$n % $radix] . $out;
+            $n = intdiv($n, $radix);
+        }
+        if (mb_strlen($out) < $length) {
+            $out = str_repeat($zero, $length - mb_strlen($out)) . $out;
+        }
+        if ($length > 0 && mb_strlen($out) > $length) {
+            throw new \OutOfRangeException(
+                "intToBaseN: value $value does not fit in $length base-$radix characters"
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * Inverse of {@see intToBaseN()}: parse a base-N string in the
+     * given alphabet to a base-10 int. Throws if any character isn't
+     * in the alphabet.
+     *
+     * Uses native int arithmetic when the value provably can't
+     * overflow signed 64-bit (radix**length <= PHP_INT_MAX), falling
+     * back to BigInteger only for the rare oversized case. Mirrors
+     * ubiq-rust's from_charset_radix which stays in i64.
+     */
+    public static function intFromBaseN(string $value, string $alphabet): int
+    {
+        $radix = mb_strlen($alphabet);
+        if ($radix < 2) {
+            throw new \InvalidArgumentException('intFromBaseN: alphabet must have at least 2 chars');
+        }
+        $chars = mb_str_split($value);
+        $alphabetMap = array_flip(mb_str_split($alphabet));
+
+        // Native fast path: radix**len <= PHP_INT_MAX guarantees no
+        // overflow. len * log(radix) < log(PHP_INT_MAX) is the same
+        // test in log space, avoiding a pow() that could itself
+        // overflow.
+        if (count($chars) * log($radix) < log(PHP_INT_MAX)) {
+            $result = 0;
+            foreach ($chars as $ch) {
+                if (!isset($alphabetMap[$ch])) {
+                    throw new \RuntimeException("intFromBaseN: char '$ch' not in alphabet");
+                }
+                $result = $result * $radix + $alphabetMap[$ch];
+            }
+            return $result;
+        }
+
+        // BigInteger fallback for values that would overflow int64.
+        $bigRadix = new \phpseclib3\Math\BigInteger($radix);
+        $result = new \phpseclib3\Math\BigInteger(0);
+        foreach ($chars as $ch) {
+            if (!isset($alphabetMap[$ch])) {
+                throw new \RuntimeException("intFromBaseN: char '$ch' not in alphabet");
+            }
+            $result = $result->multiply($bigRadix)->add(new \phpseclib3\Math\BigInteger($alphabetMap[$ch]));
+        }
+        return (int) $result->toString();
+    }
+
+    /**
+     * True when the dataset has '-' in its passthrough character set,
+     * meaning negative values can carry through FF1 via the
+     * passthrough rule.
+     */
+    public static function passthroughIncludesMinus(Dataset $dataset): bool
+    {
+        $passthrough = (string) ($dataset->structured_config['passthrough'] ?? '');
+        return mb_strpos($passthrough, '-') !== false;
+    }
+
+    /**
+     * Range-check a value against the dataset's data_type_config and
+     * encode it as a string in the dataset's input_character_set
+     * alphabet, padded to min_input_length. Negative values are
+     * prefixed with '-' when the dataset has a '-' passthrough rule;
+     * datasets without one (e.g. date_2keys) reject negatives.
+     *
+     * Replaces the old base-10-only integerToPaddedDecimal which
+     * silently produced wrong-alphabet strings for datasets like
+     * date_2keys (input alphabet is base-32).
+     */
+    public static function integerToPaddedInputString(int $value, Dataset $dataset): string
+    {
+        $cfg = $dataset->getDataTypeConfig();
+        if ($cfg !== null) {
+            if ($cfg->minInputIntValue !== null && $value < $cfg->minInputIntValue) {
+                throw new \OutOfRangeException("Value must be >= " . $cfg->minInputIntValue);
+            }
+            if ($cfg->maxInputIntValue !== null && $value > $cfg->maxInputIntValue) {
+                throw new \OutOfRangeException("Value must be <= " . $cfg->maxInputIntValue);
+            }
+        }
+
+        $alphabet = (string) ($dataset->structured_config['input_character_set'] ?? '');
+        if ($alphabet === '') {
+            throw new \RuntimeException("Dataset '" . $dataset->name . "' has no input_character_set");
+        }
+        $minLength = (int) ($dataset->structured_config['min_input_length'] ?? 0);
+        $isNegative = $value < 0;
+        if ($isNegative && !self::passthroughIncludesMinus($dataset)) {
+            throw new \OutOfRangeException(
+                "Dataset '" . $dataset->name . "' does not allow negative values"
+            );
+        }
+
+        $encoded = self::intToBaseN(abs($value), $alphabet, $minLength);
+        return $isNegative ? '-' . $encoded : $encoded;
+    }
+
+    /**
+     * Render a base-10 int as a string in the dataset's
+     * output_character_set alphabet, padded to min_input_length, so
+     * it can be fed through decrypt_structured(). Used by the decrypt
+     * side of typed methods to bridge ints back to FF1's expected
+     * input shape.
+     */
+    public static function integerToPaddedOutputString(int $value, Dataset $dataset): string
+    {
+        $alphabet = (string) ($dataset->structured_config['output_character_set'] ?? '');
+        if ($alphabet === '') {
+            throw new \RuntimeException("Dataset '" . $dataset->name . "' has no output_character_set");
+        }
+        $minLength = (int) ($dataset->structured_config['min_input_length'] ?? 0);
+        $isNegative = $value < 0;
+        if ($isNegative && !self::passthroughIncludesMinus($dataset)) {
+            throw new \OutOfRangeException(
+                "Dataset '" . $dataset->name . "' does not allow negative values"
+            );
+        }
+        $encoded = self::intToBaseN(abs($value), $alphabet, $minLength);
+        return $isNegative ? '-' . $encoded : $encoded;
+    }
+
+    /**
+     * Parse the cipher string returned by encrypt_structured() into a
+     * base-10 int, interpreting the digit chars in the dataset's
+     * output_character_set alphabet. A leading '-' is treated as
+     * sign when the dataset has a '-' passthrough rule.
+     */
+    public static function parseCipherToInt(string $cipher, Dataset $dataset): int
+    {
+        $alphabet = (string) ($dataset->structured_config['output_character_set'] ?? '');
+        if ($alphabet === '') {
+            throw new \RuntimeException("Dataset '" . $dataset->name . "' has no output_character_set");
+        }
+        $isNegative = false;
+        if (self::passthroughIncludesMinus($dataset) && strpos($cipher, '-') === 0) {
+            $isNegative = true;
+            $cipher = substr($cipher, 1);
+        }
+        $value = self::intFromBaseN($cipher, $alphabet);
+        return $isNegative ? -$value : $value;
+    }
+
+    /**
+     * Parse the plain string returned by decrypt_structured() (which
+     * is in the dataset's input_character_set alphabet) back to a
+     * base-10 int.
+     */
+    public static function parsePlainToInt(string $plain, Dataset $dataset): int
+    {
+        $alphabet = (string) ($dataset->structured_config['input_character_set'] ?? '');
+        if ($alphabet === '') {
+            throw new \RuntimeException("Dataset '" . $dataset->name . "' has no input_character_set");
+        }
+        $isNegative = false;
+        if (self::passthroughIncludesMinus($dataset) && strpos($plain, '-') === 0) {
+            $isNegative = true;
+            $plain = substr($plain, 1);
+        }
+        $value = self::intFromBaseN($plain, $alphabet);
+        return $isNegative ? -$value : $value;
+    }
+
+    /**
+     * Deprecated — kept so the early-PR test file references still
+     * load. Equivalent to {@see integerToPaddedInputString()} for
+     * datasets whose input_character_set is base-10, which is the
+     * only case the old name was correct for.
+     *
+     * @deprecated Use integerToPaddedInputString().
+     */
+    public static function integerToPaddedDecimal(int $value, Dataset $dataset): string
+    {
+        return self::integerToPaddedInputString($value, $dataset);
+    }
     
     
     /**
@@ -226,6 +568,13 @@ class Encryption
 
         $parts = Structured::deconstructFromPartialRules($plaintext, $this->_creds, $this->_dataset);
         $string = $parts['string'];
+
+        // Apply input_encoding (base64/base32) and input_pad_character padding
+        // before validation, matching the Java/.NET pipeline order (encode → pad
+        // → encrypt). When neither is configured, both are no-ops and behavior
+        // is unchanged from prior releases.
+        $string = \Ubiq\Pipeline\EncodeInputOperation::apply($string, $this->_dataset);
+        $string = \Ubiq\Pipeline\PadInputOperation::apply($string, $this->_dataset);
 
         // Validate trimmed input
         foreach (mb_str_split($string) as $char) {

@@ -346,61 +346,98 @@ class KeyManager
     }
 
     /**
-     * Get all encryption keys for a structured dataset for use with encryptForSearch
-     * Will cache if appropriate
+     * Get all encryption keys for one or more structured datasets in
+     * a single network call to GET /api/v0/fpe/def_keys.
      *
-     * @param Credentials   $creds          Credentials object to operate on
-     * @param var           $dataset_names  String or array of strings for datasets to get a key for
-     * 
-     * @return array Array of keys data
+     * Caches both the dataset config and every encrypted data key for
+     * every dataset in the response — matching the loadCache() flow
+     * in ubiq-go and the getFpeDefKeys path in ubiq-java.
+     *
+     * @param Credentials $creds         Credentials object to operate on
+     * @param mixed       $dataset_names One of:
+     *                                   - null or [] → fetch ALL datasets the
+     *                                     API key has access to (matches the
+     *                                     Go loadCache / Java getFpeDefKeys
+     *                                     empty-input contract)
+     *                                   - string     → fetch one dataset by name
+     *                                   - string[]   → fetch the listed datasets
+     *
+     * @return array Returns a list of {dataset: Dataset, key: <key cache>}
+     *               entries — one entry per (dataset, key_number) tuple — so
+     *               encryptForSearch can iterate keys across all returned
+     *               datasets. Cache side-effects apply to every dataset
+     *               regardless of how the caller uses the return value.
      */
     public function getAllEncryptionKeys(
         Credentials $creds = null,
         $dataset_names = null
     ) {
-        if (!is_array($dataset_names)) {
-            $dataset_names = [$dataset_names];
-        }
-
-        ubiq_debug($creds, 'Starting getAllEncryptionKeys for ' . implode(',', $dataset_names));
-
         if (!$creds) {
-            throw new \Exception(
-                'No valid credentials'
-            );
-            
-            return;
+            throw new \Exception('No valid credentials');
         }
 
-        $http = new Request(
-            $creds->getPapi(), $creds->getSapi()
-        );
-        
-        $resp = $http->get(
-            $creds->getHost() . '/api/v0/fpe/def_keys?papi=' . urlencode($creds->getPapi()) . '&ffs_name=' . urlencode(implode(',', $dataset_names)),
-            'application/json'
-        );
+        // Normalize input. Accepted shapes:
+        //   - null / []          → fetch every dataset accessible to the API key
+        //   - string             → wrap as single-element array
+        //   - Dataset            → unwrap to its name string
+        //   - Dataset[] / mixed  → coerce each entry to a name string
+        // The Dataset case matters because typed callers (encryptInteger,
+        // encryptDateForSearch, etc.) resolve the dataset once and pass the
+        // object through; previously this hit PHP's "Object could not be
+        // converted to string" error.
+        if ($dataset_names === null) {
+            $dataset_names = [];
+        } elseif ($dataset_names instanceof Dataset) {
+            $dataset_names = [$dataset_names->name];
+        } elseif (!is_array($dataset_names)) {
+            $dataset_names = [(string) $dataset_names];
+        } else {
+            $dataset_names = array_map(
+                function ($ds) {
+                    return $ds instanceof Dataset ? $ds->name : (string) $ds;
+                },
+                $dataset_names
+            );
+        }
+
+        $label = empty($dataset_names) ? '*all*' : implode(',', $dataset_names);
+        ubiq_debug($creds, 'Starting getAllEncryptionKeys for ' . $label);
+
+        $http = new Request($creds->getPapi(), $creds->getSapi());
+
+        $url = $creds->getHost() . '/api/v0/fpe/def_keys?papi=' . urlencode($creds->getPapi());
+        if (!empty($dataset_names)) {
+            $url .= '&ffs_name=' . urlencode(implode(',', $dataset_names));
+        }
+
+        $resp = $http->get($url, 'application/json');
 
         if (!$resp['success']) {
             throw new \Exception(
-                'Request for ' . implode(',', $dataset_names) . ' encryption keys returned ' . $resp['status']
+                'Request for ' . $label . ' encryption keys returned ' . $resp['status']
             );
-
-            return;
         }
-            
+
         $json = json_decode($resp['content'], true);
         $keys = [];
-        
+
+        // Process EVERY dataset in the response, not just the first.
+        // Prior versions returned inside this loop and silently dropped
+        // every dataset after the first.
         foreach ($json as $dataset_name => $values) {
-            $dataset = new Dataset($dataset_name, null, DatasetManager::DATASET_TYPE_STRUCTURED, $values['ffs']);
-            
+            $dataset = new Dataset(
+                $dataset_name,
+                null,
+                DatasetManager::DATASET_TYPE_STRUCTURED,
+                $values['ffs']
+            );
+
             $creds::$cachemanager::set(
                 CacheManager::CACHE_TYPE_DATASET_CONFIGS, $dataset->name, $dataset
             );
 
             foreach ($values['keys'] as $idx => $key) {
-                $key_idx = md5(base64_encode($idx));
+                $key_idx = md5(base64_encode((string) $idx));
 
                 ubiq_debug($creds, 'Got encryption key ' . $idx . ' from backend for ' . $dataset_name . ' and caching to ' . $key_idx);
 
@@ -424,13 +461,12 @@ class KeyManager
                     'key' => $cache
                 ];
             }
-
-            ubiq_debug($creds, 'Got encryption keys from backend for ' . implode(',', $dataset_names));
-            
-            ubiq_debug($creds, 'Finished getAllEncryptionKeys for ' . implode(',', $dataset_names));
-
-            return $keys;
         }
+
+        ubiq_debug($creds, 'Got encryption keys from backend for ' . $label);
+        ubiq_debug($creds, 'Finished getAllEncryptionKeys for ' . $label);
+
+        return $keys;
     }
 
     /**

@@ -41,16 +41,34 @@ class FF1
     public static $verbose = false;
 
     private static ?BigInteger $big_zero = null;
-    
+
     private static ?Credentials $_creds = null;
 
+    // AES-ECB object constructed once per FF1 instance so the key
+    // schedule isn't recomputed on every prf() call (the Feistel loop
+    // calls prf() 10+ times per cipher). CBC chaining is applied by
+    // hand in prf() so the stateless ECB object is safe to reuse.
+    private $_aes = null;
+
+    // When the GMP extension is available its compiled arbitrary-precision
+    // arithmetic replaces phpseclib's pure-PHP BigInteger for all Feistel
+    // base-conversion and modular-arithmetic steps (~10-50x faster).
+    private static bool $_use_gmp = false;
+
 
 
     
-    private static function bytesToBigInteger($array) : BigInteger
+    private static function bytesToBigInteger($array)
     {
+        if (self::$_use_gmp) {
+            if (empty($array)) return gmp_init(0);
+            $bin = '';
+            foreach ($array as $b) {
+                $bin .= chr($b & 0xFF);
+            }
+            return gmp_import($bin, 1, GMP_MSW_FIRST | GMP_BIG_ENDIAN);
+        }
         $length = sizeof($array);
-        
         $big_256 = new BigInteger(256);
         $pow = new BigInteger(1);
         $result = new BigInteger(0);
@@ -58,7 +76,6 @@ class FF1
             $result = $result->add($pow->multiply(new BigInteger($array[$length - $i - 1])));
             $pow = $pow->multiply($big_256);
         }
-        
         return $result;
     }
     
@@ -72,67 +89,80 @@ class FF1
     // https://stackoverflow.com/questions/1082917/mod-of-negative-number-is-melting-my-brain
     // return a - b * floor(a / b);
     // phpseclib\BigInteger::modPow doesn't seem to carry the negative
-    private static function modBigIntegers(
-        BigInteger $a,
-        BigInteger $b
-    ) : BigInteger {
+    private static function modBigIntegers($a, $b)
+    {
+        if (self::$_use_gmp) {
+            // gmp_mod returns non-negative result for positive divisor,
+            // which is the correct floor-mod for Feistel arithmetic.
+            return gmp_mod($a, $b);
+        }
         list($div, $remainder) = $a->divide($b);
-
         return $a->subtract($b->multiply($div));
     }
 
     private static function bigIntegerToString($number, $alphabet, $desired_string_length = FALSE) {
         $result = '';
         $radix = mb_strlen($alphabet);
-        $big_radix = new BigInteger($radix);
-        $cvt = new BigInteger($number);
         $alphabet_chars = mb_str_split($alphabet);
-    
-        // Convert the number to the desired base
-        while ($cvt->compare(self::$big_zero) > 0) {
-            // Calculate the remainder and add the corresponding character to the result
-            list($cvt, $remainder) = $cvt->divide($big_radix);
-            $remainder = (int)$remainder->toString();
-            $result = $alphabet_chars[$remainder] . $result;
+
+        if (self::$_use_gmp) {
+            $big_radix = gmp_init($radix);
+            $cvt = $number;
+            while (gmp_cmp($cvt, 0) > 0) {
+                [$cvt, $remainder] = gmp_div_qr($cvt, $big_radix);
+                $result = $alphabet_chars[gmp_intval($remainder)] . $result;
+            }
+        } else {
+            $big_radix = new BigInteger($radix);
+            $cvt = new BigInteger($number);
+            while ($cvt->compare(self::$big_zero) > 0) {
+                list($cvt, $remainder) = $cvt->divide($big_radix);
+                $result = $alphabet_chars[(int)$remainder->toString()] . $result;
+            }
         }
-    
+
         if ($desired_string_length !== FALSE) {
-            // Check if the length exceeds the desired string length
             if (mb_strlen($result) > $desired_string_length) {
                 throw new \Exception("Unable to convert big integer into {$desired_string_length} characters");
             }
-        
-            // Pad the string with leading "zero characters" to reach the desired size
             if (mb_strlen($result) < $desired_string_length) {
-                $padding = str_repeat($alphabet_chars[0], $desired_string_length - mb_strlen($result));
-                $result = $padding . $result;
+                $result = str_repeat($alphabet_chars[0], $desired_string_length - mb_strlen($result)) . $result;
             }
         }
-    
+
         return $result;
     }
 
-    private static function stringToBigInteger($number_string, $alphabet) : BigInteger {
+    private static function stringToBigInteger($number_string, $alphabet)
+    {
         $radix = mb_strlen($alphabet);
+        $alphabet_array = array_flip(mb_str_split($alphabet));
+        $chars = mb_str_split($number_string);
+
+        if (self::$_use_gmp) {
+            $number = gmp_init(0);
+            $big_radix = gmp_init($radix);
+            foreach ($chars as $ch) {
+                $idx = $alphabet_array[$ch] ?? false;
+                if ($idx === false) {
+                    throw new \Exception("Invalid character in number string: {$ch} in alphabet {$alphabet}");
+                }
+                $number = gmp_add(gmp_mul($number, $big_radix), $idx);
+            }
+            return $number;
+        }
+
         $number = new BigInteger(0);
         $digit = new BigInteger(1);
         $big_radix = new BigInteger($radix);
-        $alphabet_array = array_flip(mb_str_split($alphabet));
-        $number_string_array = mb_str_split($number_string);
-
-        // Iterate over the string in reverse order
-        for ($i = sizeof($number_string_array) - 1; $i >= 0; $i--) {
-            $character = $number_string_array[$i];
-            $alphabet_idx = $alphabet_array[$character] ?? false;
-            if ($alphabet_idx === false) {
-                throw new \Exception("Invalid character in number string: " . $character . ' in alphabet ' . $alphabet);
+        for ($i = count($chars) - 1; $i >= 0; $i--) {
+            $idx = $alphabet_array[$chars[$i]] ?? false;
+            if ($idx === false) {
+                throw new \Exception("Invalid character in number string: {$chars[$i]} in alphabet {$alphabet}");
             }
-    
-            // Update number and digit
-            $number = $number->add($digit->multiply(new BigInteger($alphabet_idx)));
+            $number = $number->add($digit->multiply(new BigInteger($idx)));
             $digit = $digit->multiply($big_radix);
         }
-    
         return $number;
     }
 
@@ -277,7 +307,17 @@ class FF1
         $this->tweak = $tweak;
         $this->radix = $radix;
         $this->alphabet = $alphabet;
-        
+
+        // Key schedule computed once here; CBC applied by hand in prf().
+        $this->_aes = new \phpseclib3\Crypt\AES('ecb');
+        $this->_aes->setKey($this->key);
+        $this->_aes->disablePadding();
+
+        // Prefer GMP extension for BigInteger arithmetic; fall back to
+        // phpseclib when GMP is absent.
+        self::$_use_gmp = extension_loaded('gmp');
+        ubiq_debug(self::$_creds, 'FF1 BigInteger backend: ' . (self::$_use_gmp ? 'gmp' : 'phpseclib'), 2);
+
         // FF1 and FF3-1 support a radix up to 65536, but the
         // implementation becomes increasingly difficult and
         // less useful in practice after the limits below.
@@ -301,62 +341,31 @@ class FF1
 
     private function prf($src, $src_offset, &$dest, $dest_offset, $length = self::BLOCK_SIZE)
     {
-        // IV is 16 bytes of zero
-        $iv = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-               
-        self::$verbose && ubiq_debug('iv ' .  implode(',', $iv));
-        // $iv = implode("", array_map("chr", $iv)); // make sure this is outside the loop
-            
-        $key = array_values(unpack('C*', $this->key));
-        self::$verbose && ubiq_debug('key ' .  implode(',', $key));
-        self::$verbose && ubiq_debug('src ' .  implode(',', $src));
-        self::$verbose && ubiq_debug('dest ' .  implode(',', $dest));
-
-        // OpenSSL encryption using AES-128-CBC with no padding
         $src_length = sizeof($src) - $src_offset;
 
-        
-        $aes = new \phpseclib3\Crypt\AES('cbc');
-        $aes->setKey(implode("", array_map("chr", $key)));
-        $aes->setIV(implode("", array_map("chr", $iv)));
-        $aes->disablePadding();
-        $aes->enableContinuousBuffer();
-
-        self::$verbose && ubiq_debug('getEngine ' .  $aes->getEngine());
+        // CBC-MAC over the input blocks with IV = 0, applied by hand
+        // so the (stateless ECB) AES object can be reused across calls.
+        // The IV / previous-ciphertext block starts as 16 zero bytes;
+        // each block is XORed with the previous ciphertext before
+        // encryption (standard CBC), and the final ciphertext block is
+        // the PRF output. This is byte-for-byte equivalent to the prior
+        // phpseclib CBC + enableContinuousBuffer implementation.
+        $prev = array_fill(0, self::BLOCK_SIZE, 0);
+        $encrypted = null;
 
         for ($i = 0; $i < $length && $i < $src_length; $i += self::BLOCK_SIZE) {
-            // Pad src_part to match the block size of self::BLOCK_SIZE bytes if necessary
             $src_part = array_slice($src, $i + $src_offset, self::BLOCK_SIZE);
             $src_part = self::padToBlockSize($src_part, self::BLOCK_SIZE);
 
-            self::$verbose && ubiq_debug('src_part ' .  implode(',', $src_part));
-
-            $encrypted = $aes->encrypt(implode("", array_map("chr", $src_part)));
-            
-            self::$verbose && ubiq_debug('encrypted phpseclib ' .  implode(',', array_values(unpack('C*', $encrypted))));
-
-            // if using openssl, the IV for subsequent encryption rounds
-            // is the encrypted byte array from the previous round
-            // phpseclib does with the continuousBuffer setting
-            // https://www.php.net/manual/en/function.openssl-encrypt.php
-            // https://api.phpseclib.com/1.0/Crypt_AES.html#method_enableContinuousBuffer
-            //
-            // $encrypted = openssl_encrypt(
-            //     implode("", array_map("chr", $src_part)),
-            //     'aes-256-cbc',
-            //     implode(array_map("chr", $key)),
-            //     OPENSSL_RAW_DATA | OPENSSL_NO_PADDING,
-            //     $iv,
-            // );
-            // $iv = $encrypted;
-            // self::$verbose && ubiq_debug('encrypted openssl ' .  implode(',', array_values(unpack('C*', $encrypted))));
-
-            if (!empty(openssl_error_string())) {
-                ubiq_debug(self::$_creds, 'Structured encrypted OpenSSL error ' . openssl_error_string());
+            // CBC: XOR previous ciphertext block into this plaintext block
+            $xored = '';
+            for ($k = 0; $k < self::BLOCK_SIZE; $k++) {
+                $xored .= chr(($src_part[$k] ^ $prev[$k]) & 0xFF);
             }
+
+            $encrypted = $this->_aes->encrypt($xored);
+            $prev = array_values(unpack('C*', $encrypted));
         }
-        self::$verbose && ubiq_debug('final encrypted ' .  implode(',', array_values(unpack('C*', $encrypted))));
 
         $encrypted_arr = array_values(unpack('C*', $encrypted));
 
@@ -364,6 +373,38 @@ class FF1
         array_splice($dest, $dest_offset, sizeof($encrypted_arr), $encrypted_arr);
 
         return $dest;
+    }
+
+    private static function bigInit(int $n) {
+        return self::$_use_gmp ? gmp_init($n) : new BigInteger($n);
+    }
+
+    private static function bigPow($base, int $exp) {
+        return self::$_use_gmp ? gmp_pow($base, $exp) : $base->pow(new BigInteger($exp));
+    }
+
+    private static function bigAdd($a, $b) {
+        return self::$_use_gmp ? gmp_add($a, $b) : $a->add($b);
+    }
+
+    private static function bigSub($a, $b) {
+        return self::$_use_gmp ? gmp_sub($a, $b) : $a->subtract($b);
+    }
+
+    private static function bigIsNeg($n): bool {
+        return self::$_use_gmp ? (gmp_cmp($n, 0) < 0) : $n->isNegative();
+    }
+
+    private static function bigToByteArray($n): array {
+        if (self::$_use_gmp) {
+            if (gmp_cmp($n, 0) == 0) return [0];
+            return array_values(unpack('C*', gmp_export($n, 1, GMP_MSW_FIRST | GMP_BIG_ENDIAN)));
+        }
+        return array_values(unpack('C*', $n->toBytes()));
+    }
+
+    private static function bigToString($n): string {
+        return self::$_use_gmp ? gmp_strval($n) : $n->toString();
     }
 
     public function encrypt(string $x) {
@@ -390,11 +431,17 @@ class FF1
 
         // tweak comes in as a base64 string
         $tweak = array_values(unpack('C*', base64_decode($tweak)));
-        $big_radix = new BigInteger($radix);
+        $big_radix = self::bigInit($radix);
 
         $n = mb_strlen($x);
         $u = floor($n / 2);
         $v = $n - $u;
+
+        // radix**m is needed every Feistel round, but m only ever
+        // takes one of two values (u or v). Precompute both here
+        // instead of recomputing the pow() inside the 10-round loop.
+        $big_radix_pow_u = self::bigPow($big_radix, (int) $u);
+        $big_radix_pow_v = self::bigPow($big_radix, (int) $v);
         
         self::$verbose && ubiq_debug('x ' . $x);
         self::$verbose && ubiq_debug('n ' . $n);
@@ -477,7 +524,7 @@ class FF1
             self::$verbose && ubiq_debug('i ' . $i);
             self::$verbose && ubiq_debug('m ' . $m);
     
-            $big_radix_pow_m = $big_radix->pow(new BigInteger($m));
+            $big_radix_pow_m = ($m == $u) ? $big_radix_pow_u : $big_radix_pow_v;
 
             $c = 0;
             $y = 0;
@@ -492,14 +539,13 @@ class FF1
             // convert numeral string B to an integer
             // export that integer as a byte array in to q
             $c = self::stringToBigInteger($B, $alphabet);
-            self::$verbose && ubiq_debug('c ' . $c->toString());
+            self::$verbose && ubiq_debug('c ' . self::bigToString($c));
 
-            // assume this is big-endian order because it came from the string
-            $numb = array_values(unpack('C*', $c->toBytes()));
+            $numb = self::bigToByteArray($c);
             self::$verbose && ubiq_debug('numb ' . implode(',', $numb));
-    
+
             if (array_key_exists(0, $numb) && $numb[0] == 0 && sizeof($numb) > 1) {
-                // Remove the extra byte if it exists
+                // Remove the phpseclib sign byte when present (GMP never adds one)
                 array_shift($numb);
             }
             
@@ -553,46 +599,44 @@ class FF1
             // where y is the number formed by the first d bytes of R
             // create an integer from the first @d bytes in @R
             $c = self::stringToBigInteger($A, $alphabet);
-            self::$verbose && ubiq_debug('c ' . $c->toString());
+            self::$verbose && ubiq_debug('c ' . self::bigToString($c));
             self::$verbose && ubiq_debug('A ' . $A);
             self::$verbose && ubiq_debug('d ' . $d);
 
             $yA = array_slice($R, 0, $d);
             self::$verbose && ubiq_debug('yA ' . implode(',', $yA));
             $y = self::bytesToBigInteger($yA);
-            self::$verbose && ubiq_debug('y ' . $y->toString());
+            self::$verbose && ubiq_debug('y ' . self::bigToString($y));
             $y = self::modBigIntegers($y, $big_radix_pow_m);
-            self::$verbose && ubiq_debug('y ' . $y->toString());
+            self::$verbose && ubiq_debug('y ' . self::bigToString($y));
 
             // Step 6vii
             if ($encrypt) {
-                self::$verbose && ubiq_debug('c adding for encrypt ' . $y->toString() . ' ' . $c->toString());
-                $c = $c->add($y);
+                self::$verbose && ubiq_debug('c adding for encrypt ' . self::bigToString($y) . ' ' . self::bigToString($c));
+                $c = self::bigAdd($c, $y);
             } else {
-                $c = $c->subtract($y);
-                self::$verbose && ubiq_debug('c subtracting for decrypt ' . $y->toString() . ' ' . $c->toString());
+                $c = self::bigSub($c, $y);
+                self::$verbose && ubiq_debug('c subtracting for decrypt ' . self::bigToString($y) . ' ' . self::bigToString($c));
             }
 
             $c = self::modBigIntegers($c, $big_radix_pow_m);
 
-            // as noted in the nodeJS library
-            // the algorithm appears to need a number between 0 and the dominator,
-            // this if statement prevents result to be negative.
-            self::$verbose && ubiq_debug('c is negative ' . $c->isNegative() . ' ' . $c->toString());
-            if ($c->isNegative()) {
-                self::$verbose && ubiq_debug('c less than zero, adding ' . $c->toString() . ' + ' . $big_radix_pow_m->toString());
-                self::$verbose && ubiq_debug('$c->add($big_radix_pow_m) ' . $c->add($big_radix_pow_m)->toSTring());
-                $c = $c->add($big_radix_pow_m);
+            // modBigIntegers (gmp_mod) is always non-negative for positive modulus,
+            // so this guard only fires in the phpseclib path.
+            self::$verbose && ubiq_debug('c is negative ' . (self::bigIsNeg($c) ? '1' : '0') . ' ' . self::bigToString($c));
+            if (self::bigIsNeg($c)) {
+                self::$verbose && ubiq_debug('c less than zero, adding ' . self::bigToString($c) . ' + ' . self::bigToString($big_radix_pow_m));
+                $c = self::bigAdd($c, $big_radix_pow_m);
             }
-            
+
             // Step 6viii
             $C = self::bigIntegerToString($c, $alphabet, $m);
             $A = $B;
-            
+
             // Step 6ix
             $B = $C;
 
-            self::$verbose && ubiq_debug('c ' . $c->toString());
+            self::$verbose && ubiq_debug('c ' . self::bigToString($c));
             self::$verbose && ubiq_debug('A ' . $A);
             self::$verbose && ubiq_debug('B ' . $B);
             self::$verbose && ubiq_debug('C ' . $C);

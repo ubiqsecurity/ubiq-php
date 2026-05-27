@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0 - 05/22/2026
+* Added typed encrypt/decrypt for integer, date, and datetime structured datasets (`encryptInteger` / `decryptInteger` / `encryptDate` / `decryptDate` / `encryptDateTime` / `decryptDateTime`) for parity with ubiq-java and ubiq-dotnet
+* Added typed encryptForSearch variants (`encryptIntegerForSearch` / `encryptDateForSearch` / `encryptDateTimeForSearch`) for searching across encrypted typed columns under historical key rotations — parity with ubiq-java `encryptIntForSearch` / `encryptLongForSearch` / `encryptDateForSearch` / `encryptDateTimeForSearch` and ubiq-dotnet `EncryptForSearchAsync` overloads
+* `\Ubiq\encryptForSearch` now rejects typed datasets with a message pointing to the matching typed search helper, matching the typed-rejection behavior of `encrypt` / `decrypt`
+* Added `data_type` and `data_type_config` typed accessors on `Dataset` plus a new `DataTypeConfig` class mirroring `com.ubiqsecurity.DataTypeConfig` (Java) and `UbiqSecurity.Internals.WebService.Models.DataTypeConfig` (.NET)
+* Added input-encoding / input-padding pipeline operations (`Ubiq\Pipeline\EncodeInputOperation`, `DecodeInputOperation`, `PadInputOperation`) so datasets with `input_encoding = base64|base32` or `input_pad_character` round-trip through `encrypt` / `decrypt` automatically
+* Added `\Ubiq\loadCache` for single-network-call prefetch of dataset configs + encryption keys across many datasets, with empty / null input meaning "fetch every dataset the API key can access" — matches the ubiq-go `loadCache` flow (ubiq-java has the equivalent internal helper `getFpeDefKeys`)
+* Fixed `KeyManager::getAllEncryptionKeys` silently dropping every dataset after the first in a multi-dataset response (the cache only contained the first dataset's keys)
+* `\Ubiq\encrypt` and `\Ubiq\decrypt` now reject non-string `data_type` datasets with a message pointing to the correct typed entry point
+* Replaced the in-tree `tests/DATA/*.json` fixtures (~470 MB) with the shared `ubiq-test-data` submodule at `tests/ubiq-test-data`, matching ubiq-java / ubiq-dotnet — run `git submodule update --init` after checkout
+
 ## 2.0.1 - 12/16/2024
 * Fix composer autoloading
 * Update composer install instructions

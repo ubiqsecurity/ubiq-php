@@ -29,11 +29,25 @@ class Dataset
     public $structured_config;
 
     /**
+     * data_type string from the server config: "string" (default),
+     * "integer", "date", "datetime", "token", etc. Convenience mirror
+     * of $structured_config['data_type'].
+     */
+    public ?string $data_type = null;
+
+    /**
+     * Typed wrapper for $structured_config['data_type_config']. Null
+     * unless the dataset has a typed data_type with bounds (integer,
+     * date, datetime).
+     */
+    public ?DataTypeConfig $data_type_config = null;
+
+    /**
      * Create a dataset
      *
      * @param string $dataset_name       Optional name
      * @param string $dataset_group_name Optional name
-     * 
+     *
      * @return None
      */
     public function __construct(
@@ -80,7 +94,7 @@ class Dataset
     public function setStructuredConfig(array $config)
     {
         $this->structured_config = $config;
-        
+
         // sort the passthrough rules by priority
         if (!empty($this->structured_config['passthrough_rules'])) {
             usort($this->structured_config['passthrough_rules'], function ($a, $b) {
@@ -88,6 +102,22 @@ class Dataset
             });
         }
 
+        // Populate typed data_type / data_type_config mirrors of the
+        // server-returned config so callers don't need to reach into
+        // $structured_config to type-check the dataset.
+        $this->data_type = isset($config['data_type']) ? (string) $config['data_type'] : null;
+        $this->data_type_config = DataTypeConfig::fromArray($config['data_type_config'] ?? null);
+
         return $this;
+    }
+
+    public function getDataType(): ?string
+    {
+        return $this->data_type;
+    }
+
+    public function getDataTypeConfig(): ?DataTypeConfig
+    {
+        return $this->data_type_config;
     }
 }
